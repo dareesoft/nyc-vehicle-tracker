@@ -3,8 +3,42 @@
  * Full-screen map with bottom sheet and tab navigation
  */
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useLayoutEffect } from 'react'
 import { useTripStore, Device, Trip } from '../stores/tripStore'
+
+// Fix for mobile browser viewport height issues
+function useViewportHeight() {
+  useLayoutEffect(() => {
+    const setVH = () => {
+      // Get the actual visible viewport height
+      const vh = window.innerHeight * 0.01
+      document.documentElement.style.setProperty('--vh', `${vh}px`)
+    }
+
+    setVH()
+    window.addEventListener('resize', setVH)
+    window.addEventListener('orientationchange', setVH)
+
+    // Also update on scroll for browsers that hide/show address bar
+    let ticking = false
+    const onScroll = () => {
+      if (!ticking) {
+        window.requestAnimationFrame(() => {
+          setVH()
+          ticking = false
+        })
+        ticking = true
+      }
+    }
+    window.addEventListener('scroll', onScroll)
+
+    return () => {
+      window.removeEventListener('resize', setVH)
+      window.removeEventListener('orientationchange', setVH)
+      window.removeEventListener('scroll', onScroll)
+    }
+  }, [])
+}
 import { useDevices, useTrips, useTripDetails, useScanStatus } from '../hooks/useTrip'
 import { MobileHeader, BottomSheet, TabBar, MobileTimeline } from '../components/mobile'
 import type { TabId } from '../components/mobile/TabBar'
@@ -81,6 +115,9 @@ function MobileDeviceSelector() {
 }
 
 export default function MobileLayout() {
+  // Fix mobile viewport height
+  useViewportHeight()
+  
   const [activeTab, setActiveTab] = useState<TabId>('map')
   const [bottomSheetOpen, setBottomSheetOpen] = useState(true)
   const [infoTab, setInfoTab] = useState<'telemetry' | 'detection'>('telemetry')
@@ -166,7 +203,10 @@ export default function MobileLayout() {
   }
 
   return (
-    <div className="h-screen w-screen flex flex-col bg-cyber-black overflow-hidden">
+    <div 
+      className="w-screen flex flex-col bg-cyber-black overflow-hidden"
+      style={{ height: 'calc(var(--vh, 1vh) * 100)' }}
+    >
       {/* Scanline overlay */}
       <ScanlineOverlay opacity={0.02} speed="slow" />
       

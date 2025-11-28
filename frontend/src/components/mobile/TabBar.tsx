@@ -68,7 +68,13 @@ const tabs: TabItem[] = [
 
 export default function TabBar({ activeTab, onTabChange, showBadge = {} }: TabBarProps) {
   return (
-    <nav className="h-14 glass-panel border-t border-cyber-cyan/20 flex items-center justify-around px-2 safe-area-bottom">
+    <nav 
+      className="glass-panel border-t border-cyber-cyan/20 flex items-center justify-around px-2"
+      style={{ 
+        height: 'calc(3.5rem + env(safe-area-inset-bottom, 0px))',
+        paddingBottom: 'env(safe-area-inset-bottom, 0px)'
+      }}
+    >
       {tabs.map((tab) => {
         const isActive = activeTab === tab.id
         const badge = showBadge[tab.id]
