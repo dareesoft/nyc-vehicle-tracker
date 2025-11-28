@@ -3,54 +3,95 @@
  * Themed access terminal with glitch effects and neon glow
  */
 
-import { useState, useEffect, useRef, useMemo } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../hooks/useAuth'
 
-// Matrix rain digit component
-function MatrixRain() {
-  const columns = useMemo(() => {
-    const cols = []
-    const numColumns = Math.floor(window.innerWidth / 20)
-    for (let i = 0; i < numColumns; i++) {
-      cols.push({
-        id: i,
-        left: `${(i / numColumns) * 100}%`,
-        delay: Math.random() * 5,
-        duration: 3 + Math.random() * 4,
-        digits: Array.from({ length: 15 + Math.floor(Math.random() * 10) }, () => 
-          Math.random() > 0.5 ? Math.floor(Math.random() * 10) : String.fromCharCode(0x30A0 + Math.random() * 96)
-        )
-      })
-    }
-    return cols
+// Words and items for Matrix rain
+const MATRIX_ITEMS = [
+  '다리소프트', 'ARA20', 'ARA30', 'RiaaS', 'AI', 'Edge', 'road', 'analyzer',
+  'daree', 'dareesoft', '도로', '위험 정보', '안전', 'safe road',
+  'Road hazard Information as a Service', 'Road Analyzer', 'Road Wise',
+  'Road View', 'Road Keeper', 'Road Maintenance', 'Hazard Detection',
+  'VisionX', 'Pavement Condition', 'Seoul', 'New york', 'Canada',
+  'Transportation', 'Gemini', 'Elizabeth', 'Mandella', 'dongha', 'sohee',
+  '0', '1', '2', '3', '4', '5', '6', '7', '8', '9'
+]
+
+function getRandomItem() {
+  return MATRIX_ITEMS[Math.floor(Math.random() * MATRIX_ITEMS.length)]
+}
+
+// Matrix rain column component with changing characters
+function MatrixColumn({ left, delay, duration }: { left: string; delay: number; duration: number }) {
+  const [items, setItems] = useState<string[]>(() => 
+    Array.from({ length: 8 + Math.floor(Math.random() * 5) }, () => getRandomItem())
+  )
+
+  // Randomly change some characters while falling
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setItems(prev => prev.map(item => 
+        Math.random() > 0.7 ? getRandomItem() : item
+      ))
+    }, 500 + Math.random() * 500)
+
+    return () => clearInterval(interval)
   }, [])
 
   return (
-    <div className="absolute inset-0 overflow-hidden pointer-events-none">
-      {columns.map((col) => (
+    <div
+      className="absolute top-0 font-mono text-xs leading-relaxed whitespace-nowrap"
+      style={{
+        left,
+        animation: `matrix-fall ${duration}s linear infinite`,
+        animationDelay: `${delay}s`,
+        opacity: 0,
+        writingMode: 'vertical-rl',
+        textOrientation: 'mixed',
+      }}
+    >
+      {items.map((item, idx) => (
         <div
-          key={col.id}
-          className="absolute top-0 font-mono text-sm leading-tight"
+          key={idx}
+          className="text-cyber-cyan my-1"
           style={{
-            left: col.left,
-            animation: `matrix-fall ${col.duration}s linear infinite`,
-            animationDelay: `${col.delay}s`,
-            opacity: 0,
+            opacity: 0.05 + (idx / items.length) * 0.25,
+            textShadow: idx === items.length - 1 ? '0 0 8px #00fff7' : 'none',
+            fontSize: item.length > 5 ? '8px' : '11px',
           }}
         >
-          {col.digits.map((digit, idx) => (
-            <div
-              key={idx}
-              className="text-cyber-cyan"
-              style={{
-                opacity: 0.1 + (idx / col.digits.length) * 0.3,
-                textShadow: idx === col.digits.length - 1 ? '0 0 10px #00fff7' : 'none',
-              }}
-            >
-              {digit}
-            </div>
-          ))}
+          {item}
         </div>
+      ))}
+    </div>
+  )
+}
+
+// Matrix rain background
+function MatrixRain() {
+  const columns = useRef<{ id: number; left: string; delay: number; duration: number }[]>([])
+  
+  if (columns.current.length === 0) {
+    const numColumns = Math.floor(window.innerWidth / 60)
+    for (let i = 0; i < numColumns; i++) {
+      columns.current.push({
+        id: i,
+        left: `${(i / numColumns) * 100}%`,
+        delay: Math.random() * 10,
+        duration: 12 + Math.random() * 8, // Slower: 12-20 seconds (doubled from 6-10)
+      })
+    }
+  }
+
+  return (
+    <div className="absolute inset-0 overflow-hidden pointer-events-none">
+      {columns.current.map((col) => (
+        <MatrixColumn
+          key={col.id}
+          left={col.left}
+          delay={col.delay}
+          duration={col.duration}
+        />
       ))}
     </div>
   )
@@ -71,7 +112,7 @@ function AuthenticatingOverlay({ onComplete }: { onComplete: () => void }) {
       } else {
         clearInterval(typingInterval)
       }
-    }, 100) // ~1.7s for full text
+    }, 120) // ~2s for full text
 
     // After 2.5s total, start fade out
     const fadeTimer = setTimeout(() => {
@@ -92,7 +133,7 @@ function AuthenticatingOverlay({ onComplete }: { onComplete: () => void }) {
 
   return (
     <div className={`
-      fixed inset-0 z-50 bg-cyber-black flex items-center justify-center
+      fixed inset-0 z-[9999] bg-cyber-black flex items-center justify-center
       transition-opacity duration-1000
       ${isFadingOut ? 'opacity-0' : 'opacity-100'}
     `}>
@@ -123,9 +164,9 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [showAuthOverlay, setShowAuthOverlay] = useState(false)
   const [showGlitch, setShowGlitch] = useState(false)
-  const { login } = useAuth()
+  const [pendingAuth, setPendingAuth] = useState<{ token: string; user: string; expiresAt: string } | null>(null)
+  const { validateCredentials, setAuthenticated } = useAuth()
   const usernameRef = useRef<HTMLInputElement>(null)
-  const loginSuccessRef = useRef(false)
 
   // Focus username input on mount
   useEffect(() => {
@@ -150,12 +191,19 @@ export default function LoginPage() {
     setIsLoading(true)
 
     try {
-      const result = await login(username, password)
+      // Validate credentials without setting auth state
+      const result = await validateCredentials(username, password)
       
-      if (result.success) {
+      if (result.success && result.token && result.user && result.expiresAt) {
+        // Store credentials for later
+        setPendingAuth({
+          token: result.token,
+          user: result.user,
+          expiresAt: result.expiresAt,
+        })
         // Show authenticating overlay
-        loginSuccessRef.current = true
         setShowAuthOverlay(true)
+        setIsLoading(false)
       } else {
         setError(result.message || 'ACCESS DENIED')
         setShowGlitch(true)
@@ -171,7 +219,10 @@ export default function LoginPage() {
   }
 
   const handleAuthComplete = () => {
-    // Auth state change will trigger App.tsx to show boot sequence
+    // Now actually set the authenticated state
+    if (pendingAuth) {
+      setAuthenticated(pendingAuth.token, pendingAuth.user, pendingAuth.expiresAt)
+    }
     setShowAuthOverlay(false)
   }
 
@@ -390,10 +441,10 @@ export default function LoginPage() {
             transform: translateY(-100%);
             opacity: 0;
           }
-          10% {
+          5% {
             opacity: 1;
           }
-          90% {
+          95% {
             opacity: 1;
           }
           100% { 

@@ -19,10 +19,15 @@ interface AuthState {
 interface LoginResult {
   success: boolean
   message?: string
+  token?: string
+  user?: string
+  expiresAt?: string
 }
 
 interface AuthContextType extends AuthState {
   login: (username: string, password: string) => Promise<LoginResult>
+  validateCredentials: (username: string, password: string) => Promise<LoginResult>
+  setAuthenticated: (token: string, user: string, expiresAt: string) => void
   logout: () => Promise<void>
   checkAuth: () => Promise<boolean>
 }
@@ -123,6 +128,45 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  // Validate credentials without setting auth state (for animation flow)
+  const validateCredentials = useCallback(async (username: string, password: string): Promise<LoginResult> => {
+    try {
+      const response = await fetch(`${API_BASE}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password }),
+      })
+
+      const data = await response.json()
+
+      if (data.success && data.token) {
+        return { 
+          success: true, 
+          token: data.token,
+          user: data.user,
+          expiresAt: data.expires_at,
+        }
+      } else {
+        return { success: false, message: data.message || 'Login failed' }
+      }
+    } catch (error) {
+      console.error('Validation error:', error)
+      return { success: false, message: 'Connection error' }
+    }
+  }, [])
+
+  // Set authenticated state (called after animation)
+  const setAuthenticated = useCallback((token: string, user: string, expiresAt: string) => {
+    saveAuth(token, user, expiresAt)
+    setState({
+      isAuthenticated: true,
+      isLoading: false,
+      user,
+      token,
+      expiresAt,
+    })
+  }, [])
+
   const login = useCallback(async (username: string, password: string): Promise<LoginResult> => {
     setState(prev => ({ ...prev, isLoading: true }))
 
@@ -193,6 +237,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const value: AuthContextType = {
     ...state,
     login,
+    validateCredentials,
+    setAuthenticated,
     logout,
     checkAuth,
   }
