@@ -1,10 +1,12 @@
-import { useState, lazy, Suspense } from 'react'
+import { useState, useEffect, useRef, lazy, Suspense } from 'react'
 import { useIsMobile } from './hooks/useMediaQuery'
+import { useAuth } from './hooks/useAuth'
 import { BootSequence } from './components/ui'
 
-// Lazy load layouts for code splitting
+// Lazy load layouts and pages for code splitting
 const DesktopLayout = lazy(() => import('./layouts/DesktopLayout'))
 const MobileLayout = lazy(() => import('./layouts/MobileLayout'))
+const LoginPage = lazy(() => import('./pages/LoginPage'))
 
 // Loading fallback component
 function LayoutLoader() {
@@ -20,20 +22,74 @@ function LayoutLoader() {
   )
 }
 
+// Auth loading screen
+function AuthLoader() {
+  return (
+    <div className="h-screen w-screen bg-cyber-black flex items-center justify-center">
+      <div className="text-center">
+        <div className="cyber-spinner mx-auto mb-4" />
+        <p className="text-cyber-cyan font-mono text-sm tracking-wider animate-pulse">
+          VERIFYING CREDENTIALS...
+        </p>
+      </div>
+    </div>
+  )
+}
+
 function App() {
-  const [isBooting, setIsBooting] = useState(true)
+  const [showBoot, setShowBoot] = useState(false)
+  const [bootComplete, setBootComplete] = useState(false)
   const isMobile = useIsMobile()
+  const { isAuthenticated, isLoading: isAuthLoading } = useAuth()
+  
+  // Track previous auth state to detect login
+  const wasAuthenticated = useRef(isAuthenticated)
+  const hasShownInitialBoot = useRef(false)
+
+  // Detect when user just logged in
+  useEffect(() => {
+    // User just logged in (was not authenticated, now is)
+    if (!wasAuthenticated.current && isAuthenticated && !isAuthLoading) {
+      setShowBoot(true)
+      setBootComplete(false)
+    }
+    wasAuthenticated.current = isAuthenticated
+  }, [isAuthenticated, isAuthLoading])
+
+  // Show initial boot sequence for already authenticated users (on page load)
+  useEffect(() => {
+    if (isAuthenticated && !isAuthLoading && !hasShownInitialBoot.current) {
+      hasShownInitialBoot.current = true
+      setShowBoot(true)
+    }
+  }, [isAuthenticated, isAuthLoading])
 
   // Handle boot sequence completion
   const handleBootComplete = () => {
-    setIsBooting(false)
+    setShowBoot(false)
+    setBootComplete(true)
   }
 
-  // Show boot sequence on initial load
-  if (isBooting) {
+  // Show auth loading while verifying token
+  if (isAuthLoading) {
+    return <AuthLoader />
+  }
+
+  // Show login page if not authenticated
+  if (!isAuthenticated) {
+    return (
+      <Suspense fallback={<AuthLoader />}>
+        <LoginPage />
+      </Suspense>
+    )
+  }
+
+  // Show boot sequence after login or on initial load
+  if (showBoot && !bootComplete) {
     return <BootSequence onComplete={handleBootComplete} />
   }
 
+  // Show main application
   return (
     <Suspense fallback={<LayoutLoader />}>
       {isMobile ? <MobileLayout /> : <DesktopLayout />}

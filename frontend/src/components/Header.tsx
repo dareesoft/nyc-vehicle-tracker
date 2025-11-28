@@ -1,6 +1,7 @@
 import { useTripStore } from '../stores/tripStore'
 import { useStats } from '../hooks/useTrip'
 import { useGlitch } from '../hooks/useAnimations'
+import { useAuth } from '../hooks/useAuth'
 import { AnimatedNumber, GlitchText, StatusIndicator, HUDCorner } from './ui'
 import NotificationPanel from './NotificationPanel'
 
@@ -8,10 +9,16 @@ export default function Header() {
   const { viewMode, setViewMode, setShowTripSelector, selectedTrips, combinedRoutes } = useTripStore()
   const { data: stats } = useStats()
   const { isGlitching, triggerGlitch } = useGlitch()
+  const { user, logout } = useAuth()
 
   const handleModeChange = (mode: '2d' | '3d') => {
     triggerGlitch()
     setViewMode(mode)
+  }
+
+  const handleLogout = async () => {
+    triggerGlitch()
+    await logout()
   }
 
   return (
@@ -172,6 +179,27 @@ export default function Header() {
               <div className="absolute inset-0 bg-cyber-magenta/10" />
             )}
             <span className="relative z-10">3D VIEW</span>
+          </button>
+        </div>
+
+        {/* User & Logout */}
+        <div className="flex items-center gap-3 pl-4 border-l border-cyber-cyan/20">
+          <div className="text-right">
+            <p className="text-[10px] text-cyber-cyan/50 tracking-wider">OPERATOR</p>
+            <p className="text-sm font-mono text-cyber-cyan">{user?.toUpperCase() || 'UNKNOWN'}</p>
+          </div>
+          <button
+            onClick={handleLogout}
+            className="p-2 rounded-lg border border-cyber-magenta/30 text-cyber-magenta/70 
+              hover:border-cyber-magenta hover:text-cyber-magenta hover:bg-cyber-magenta/10
+              transition-all duration-200 group"
+            title="Logout"
+          >
+            <svg className="w-5 h-5 group-hover:animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
+                d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" 
+              />
+            </svg>
           </button>
         </div>
       </div>

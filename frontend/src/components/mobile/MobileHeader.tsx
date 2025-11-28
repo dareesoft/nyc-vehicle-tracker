@@ -5,11 +5,13 @@
 
 import { useTripStore } from '../../stores/tripStore'
 import { useStats } from '../../hooks/useTrip'
+import { useAuth } from '../../hooks/useAuth'
 import { StatusIndicator } from '../ui'
 
 export default function MobileHeader() {
   const { viewMode, setViewMode, selectedDevice, selectedTrip } = useTripStore()
   const { data: stats } = useStats()
+  const { logout } = useAuth()
 
   return (
     <header className="h-12 glass-panel flex items-center justify-between px-3 border-b border-cyber-cyan/20 relative z-20">
@@ -50,7 +52,7 @@ export default function MobileHeader() {
         </div>
       )}
       
-      {/* Right: Status & View Toggle */}
+      {/* Right: Status, View Toggle & Logout */}
       <div className="flex items-center gap-2">
         {/* System status */}
         <StatusIndicator 
@@ -85,6 +87,20 @@ export default function MobileHeader() {
             3D
           </button>
         </div>
+
+        {/* Logout */}
+        <button
+          onClick={logout}
+          className="p-1.5 rounded border border-cyber-magenta/30 text-cyber-magenta/70 
+            active:bg-cyber-magenta/20 transition-colors"
+          title="Logout"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
+              d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" 
+            />
+          </svg>
+        </button>
       </div>
     </header>
   )

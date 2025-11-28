@@ -4,9 +4,12 @@ Provides REST API for vehicle tracking data and image serving.
 """
 import os
 import asyncio
+import secrets
+import hashlib
 from pathlib import Path
 from typing import Optional
 from contextlib import asynccontextmanager
+from datetime import datetime, timedelta
 
 from fastapi import FastAPI, HTTPException, Query, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
@@ -37,6 +40,15 @@ from services.download_watcher import start_watcher, stop_watcher, get_watcher
 # Configuration
 DATA_ROOT = os.environ.get('DATA_ROOT', '/mnt/sata_2025/NYC/Test_data_2025_11_24')
 DB_PATH = os.environ.get('DB_PATH', '/home/daree/02-Work-dh/nyc-vehicle-tracker/backend/data/metadata_cache.db')
+
+# Authentication configuration
+AUTH_USERS = {
+    "daree": "riaas0110!"
+}
+AUTH_TOKEN_EXPIRY_HOURS = 24 * 7  # 7 days
+
+# Active tokens storage (in production, use Redis or database)
+active_tokens: dict[str, dict] = {}
 
 # Ensure data directory exists
 os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
@@ -119,6 +131,23 @@ class ScanStatus(BaseModel):
     current: int
     total: int
     status: str
+
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+class LoginResponse(BaseModel):
+    success: bool
+    token: Optional[str] = None
+    user: Optional[str] = None
+    expires_at: Optional[str] = None
+    message: Optional[str] = None
+
+
+class VerifyRequest(BaseModel):
+    token: str
 
 
 # Background scan task
@@ -216,6 +245,84 @@ async def run_detection_scan():
 async def health_check():
     """Health check endpoint."""
     return {"status": "healthy", "cache_size": cache.get_image_count() if cache else 0}
+
+
+# ==================== Authentication Endpoints ====================
+
+def generate_token() -> str:
+    """Generate a secure random token."""
+    return secrets.token_urlsafe(32)
+
+
+def clean_expired_tokens():
+    """Remove expired tokens from active_tokens."""
+    now = datetime.utcnow()
+    expired = [token for token, data in active_tokens.items() 
+               if datetime.fromisoformat(data['expires_at']) < now]
+    for token in expired:
+        del active_tokens[token]
+
+
+@app.post("/api/auth/login", response_model=LoginResponse)
+async def login(credentials: LoginRequest):
+    """Authenticate user and return session token."""
+    # Clean expired tokens periodically
+    clean_expired_tokens()
+    
+    # Verify credentials
+    if credentials.username not in AUTH_USERS:
+        return LoginResponse(success=False, message="Invalid username or password")
+    
+    if AUTH_USERS[credentials.username] != credentials.password:
+        return LoginResponse(success=False, message="Invalid username or password")
+    
+    # Generate token
+    token = generate_token()
+    expires_at = datetime.utcnow() + timedelta(hours=AUTH_TOKEN_EXPIRY_HOURS)
+    
+    # Store token
+    active_tokens[token] = {
+        "user": credentials.username,
+        "expires_at": expires_at.isoformat(),
+        "created_at": datetime.utcnow().isoformat()
+    }
+    
+    return LoginResponse(
+        success=True,
+        token=token,
+        user=credentials.username,
+        expires_at=expires_at.isoformat()
+    )
+
+
+@app.post("/api/auth/verify")
+async def verify_token(request: VerifyRequest):
+    """Verify if a token is valid."""
+    clean_expired_tokens()
+    
+    if request.token not in active_tokens:
+        return {"valid": False, "message": "Invalid or expired token"}
+    
+    token_data = active_tokens[request.token]
+    expires_at = datetime.fromisoformat(token_data['expires_at'])
+    
+    if datetime.utcnow() > expires_at:
+        del active_tokens[request.token]
+        return {"valid": False, "message": "Token expired"}
+    
+    return {
+        "valid": True,
+        "user": token_data['user'],
+        "expires_at": token_data['expires_at']
+    }
+
+
+@app.post("/api/auth/logout")
+async def logout(request: VerifyRequest):
+    """Invalidate a token."""
+    if request.token in active_tokens:
+        del active_tokens[request.token]
+    return {"success": True}
 
 
 @app.get("/api/scan/status", response_model=ScanStatus)
