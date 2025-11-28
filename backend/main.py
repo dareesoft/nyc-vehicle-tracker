@@ -31,6 +31,9 @@ except ImportError:
 # Import scheduler
 from services.scheduler import init_scheduler, get_scheduler, stop_scheduler
 
+# Import download watcher
+from services.download_watcher import start_watcher, stop_watcher, get_watcher
+
 # Configuration
 DATA_ROOT = os.environ.get('DATA_ROOT', '/mnt/sata_2025/NYC/Test_data_2025_11_24')
 DB_PATH = os.environ.get('DB_PATH', '/home/daree/02-Work-dh/nyc-vehicle-tracker/backend/data/metadata_cache.db')
@@ -65,9 +68,14 @@ async def lifespan(app: FastAPI):
     init_scheduler(run_scan)
     print("Scheduler initialized for daily scans at 22:00 KST")
     
+    # Initialize download watcher (triggers scan when S3 download completes)
+    start_watcher(on_download_complete=lambda: asyncio.create_task(run_scan()))
+    print("Download watcher initialized - will scan when S3 downloads complete")
+    
     yield
     
     # Cleanup
+    stop_watcher()
     stop_scheduler()
     print("Shutting down...")
 
@@ -557,6 +565,15 @@ async def get_scheduler_status():
     if scheduler:
         return scheduler.get_status()
     return {"is_running": False}
+
+
+@app.get("/api/watcher/status")
+async def get_watcher_status():
+    """Get download watcher status."""
+    watcher = get_watcher()
+    if watcher:
+        return watcher.get_status()
+    return {"is_running": False, "message": "Watcher not initialized"}
 
 
 @app.post("/api/scan/trigger")
