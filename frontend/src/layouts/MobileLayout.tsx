@@ -244,8 +244,8 @@ export default function MobileLayout() {
         </BottomSheet>
       )}
       
-      {/* Timeline on map tab */}
-      {activeTab === 'map' && selectedTrip && (
+      {/* Timeline - Always visible when trip is selected */}
+      {selectedTrip && (
         <div className="glass-panel border-t border-cyber-cyan/20 px-2 py-2">
           <MobileTimeline />
         </div>
