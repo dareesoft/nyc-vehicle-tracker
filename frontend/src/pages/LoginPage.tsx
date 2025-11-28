@@ -28,36 +28,32 @@ const MATRIX_ITEMS = [
   '42', '2001', '02', '18', '2020', '8967', '0110',
 ]
 
-// Get all individual characters from MATRIX_ITEMS
-const MATRIX_CHARS: string[] = []
-MATRIX_ITEMS.forEach(item => {
-  if (/[가-힣]/.test(item)) {
-    // Korean: add each character separately
-    item.split('').forEach(char => {
-      if (!MATRIX_CHARS.includes(char)) MATRIX_CHARS.push(char)
-    })
-  } else {
-    // English/Numbers: add each character
-    item.split('').forEach(char => {
-      if (!MATRIX_CHARS.includes(char)) MATRIX_CHARS.push(char)
-    })
-  }
-})
+// Get random word from MATRIX_ITEMS
+function getRandomWord(): string {
+  return MATRIX_ITEMS[Math.floor(Math.random() * MATRIX_ITEMS.length)]
+}
 
-function getRandomChar(): string {
-  return MATRIX_CHARS[Math.floor(Math.random() * MATRIX_CHARS.length)]
+// Generate array of 3-5 random words
+function getRandomWords(): string[] {
+  const count = 3 + Math.floor(Math.random() * 3) // 3-5 words
+  return Array.from({ length: count }, () => getRandomWord())
+}
+
+// Calculate total character count from words array
+function getTotalLength(words: string[]): number {
+  return words.reduce((sum, word) => sum + word.length, 0)
 }
 
 interface Drop {
   x: number
   y: number
   speed: number
-  length: number
-  chars: string[]
+  words: string[]       // Array of connected words
+  totalLength: number   // Total character count
   layer: 'front' | 'back'
 }
 
-// Canvas-based Matrix Rain
+// Canvas-based Matrix Rain - Connected words with gradient
 function MatrixCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const dropsRef = useRef<Drop[]>([])
@@ -65,134 +61,129 @@ function MatrixCanvas() {
 
   const initDrops = useCallback((width: number, height: number) => {
     const drops: Drop[] = []
-    const columnWidth = 70 // wider spacing between columns
-    const numColumns = Math.ceil(width / columnWidth)
+    const columnWidth = 80
 
-    for (let i = 0; i < numColumns; i++) {
-      // Front layer drop - only 70% of columns
+    for (let i = 0; i < Math.ceil(width / columnWidth); i++) {
+      // Front layer - 70% of columns
       if (Math.random() > 0.3) {
+        const words = getRandomWords()
         drops.push({
           x: i * columnWidth + columnWidth / 2,
-          y: Math.random() * height * -1, // Start above screen
-          speed: 1.5 + Math.random() * 2, // Slower: 1.5-3.5 px per frame
-          length: 6 + Math.floor(Math.random() * 8), // Shorter: 6-14 chars
-          chars: Array.from({ length: 15 }, () => getRandomChar()),
+          y: -Math.random() * height,
+          speed: 1.0 + Math.random() * 1.2,
+          words,
+          totalLength: getTotalLength(words),
           layer: 'front',
         })
       }
-
-      // Back layer drop - only 30% of columns
-      if (Math.random() > 0.7) {
+      // Back layer - 40% of columns
+      if (Math.random() > 0.6) {
+        const words = getRandomWords()
         drops.push({
-          x: i * columnWidth + columnWidth / 4,
-          y: Math.random() * height * -1 - height / 2,
-          speed: 0.8 + Math.random() * 1, // Slower: 0.8-1.8 px per frame
-          length: 4 + Math.floor(Math.random() * 5), // Shorter: 4-9 chars
-          chars: Array.from({ length: 10 }, () => getRandomChar()),
+          x: i * columnWidth + columnWidth / 3,
+          y: -Math.random() * height - 300,
+          speed: 0.5 + Math.random() * 0.6,
+          words,
+          totalLength: getTotalLength(words),
           layer: 'back',
         })
       }
     }
-
     dropsRef.current = drops
   }, [])
 
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
-
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
-    // Handle resize
     const handleResize = () => {
       canvas.width = window.innerWidth
       canvas.height = window.innerHeight
       initDrops(canvas.width, canvas.height)
     }
-
     handleResize()
     window.addEventListener('resize', handleResize)
 
-    // Animation loop
     const animate = () => {
-      // Trail effect: semi-transparent overlay (higher alpha = faster fade)
-      ctx.fillStyle = 'rgba(10, 10, 15, 0.15)'
+      // Clear canvas completely - no trail effect
+      ctx.fillStyle = '#0a0a0f'
       ctx.fillRect(0, 0, canvas.width, canvas.height)
-
-      const charHeight = 18 // Vertical spacing between characters
 
       dropsRef.current.forEach((drop) => {
         const isBack = drop.layer === 'back'
         const fontSize = isBack ? 11 : 14
-        const baseOpacity = isBack ? 0.4 : 1
+        const baseOpacity = isBack ? 0.5 : 1.0
+        const charHeight = fontSize + 3
 
         ctx.font = `${fontSize}px "Courier New", monospace`
 
-        // Draw each character in the trail
-        for (let i = 0; i < drop.length; i++) {
-          const charY = drop.y - i * charHeight
+        // Flatten all words into single character array with positions
+        let globalCharIndex = 0
+        const totalChars = drop.totalLength
+
+        drop.words.forEach((word) => {
+          const chars = word.split('')
           
-          // Skip if off screen
-          if (charY < -charHeight || charY > canvas.height + charHeight) continue
+          chars.forEach((char) => {
+            const charY = drop.y + globalCharIndex * charHeight
 
-          // Calculate opacity: head is brightest, fades towards tail
-          const fadeRatio = 1 - (i / drop.length)
-          const opacity = fadeRatio * fadeRatio * baseOpacity // Quadratic falloff
+            // Only draw if on screen
+            if (charY >= -charHeight && charY <= canvas.height + charHeight) {
+              // Brightness: top (dark) → bottom (bright)
+              // globalCharIndex / totalChars goes from 0 to 1
+              const brightness = 0.15 + (globalCharIndex / totalChars) * 0.85
+              const opacity = brightness * baseOpacity
 
-          // Character morphing: ~5% chance per frame
-          if (Math.random() < 0.05) {
-            drop.chars[i] = getRandomChar()
-          }
+              // Last character gets glow effect
+              const isLastChar = globalCharIndex === totalChars - 1
 
-          const char = drop.chars[i] || getRandomChar()
+              if (isLastChar) {
+                ctx.shadowBlur = 15
+                ctx.shadowColor = '#00fff7'
+                ctx.fillStyle = `rgba(220, 255, 255, ${opacity})`
+              } else {
+                ctx.shadowBlur = 0
+                ctx.fillStyle = `rgba(0, 255, 247, ${opacity})`
+              }
 
-          if (i === 0) {
-            // Head character: bright white/cyan with glow
-            ctx.shadowBlur = 15
-            ctx.shadowColor = '#00fff7'
-            ctx.fillStyle = `rgba(255, 255, 255, ${opacity})`
-          } else if (i === 1) {
-            // Second character: bright cyan
-            ctx.shadowBlur = 10
-            ctx.shadowColor = '#00fff7'
-            ctx.fillStyle = `rgba(0, 255, 247, ${opacity})`
-          } else {
-            // Tail characters: fading cyan
-            ctx.shadowBlur = 0
-            ctx.fillStyle = `rgba(0, 255, 247, ${opacity * 0.8})`
-          }
+              ctx.fillText(char, drop.x, charY)
+            }
 
-          ctx.fillText(char, drop.x, charY)
-        }
+            globalCharIndex++
+          })
+        })
 
-        // Reset shadow
         ctx.shadowBlur = 0
 
         // Update position
         drop.y += drop.speed
 
         // Reset when completely off screen
-        if (drop.y - drop.length * charHeight > canvas.height) {
-          drop.y = -drop.length * charHeight - Math.random() * 200
-          drop.speed = drop.layer === 'back' 
-            ? 1 + Math.random() * 1.5 
-            : 2 + Math.random() * 3
-          drop.length = drop.layer === 'back'
-            ? 5 + Math.floor(Math.random() * 8)
-            : 8 + Math.floor(Math.random() * 12)
-          // Refresh characters
-          drop.chars = Array.from({ length: 20 }, () => getRandomChar())
+        if (drop.y > canvas.height + 50) {
+          const newWords = getRandomWords()
+          drop.y = -getTotalLength(newWords) * charHeight - Math.random() * 100
+          drop.words = newWords
+          drop.totalLength = getTotalLength(newWords)
+          drop.speed = drop.layer === 'back'
+            ? 0.5 + Math.random() * 0.6
+            : 1.0 + Math.random() * 1.2
+        }
+
+        // Word morphing - 0.5% chance per frame
+        if (Math.random() < 0.005) {
+          const randomIndex = Math.floor(Math.random() * drop.words.length)
+          drop.words[randomIndex] = getRandomWord()
+          drop.totalLength = getTotalLength(drop.words)
         }
       })
 
       animationRef.current = requestAnimationFrame(animate)
     }
 
-    // Start animation
     animationRef.current = requestAnimationFrame(animate)
 
-    // Cleanup
     return () => {
       window.removeEventListener('resize', handleResize)
       cancelAnimationFrame(animationRef.current)
