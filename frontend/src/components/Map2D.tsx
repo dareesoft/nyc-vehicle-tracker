@@ -4,6 +4,7 @@ import type { MapRef, LayerProps, MapLayerMouseEvent } from 'react-map-gl/maplib
 import maplibregl from 'maplibre-gl'
 import { useTripStore } from '../stores/tripStore'
 import { useTripGeoJSON, useDetections, detectionToGeoJSON, Detection } from '../hooks/useTrip'
+import { useIsMobile } from '../hooks/useMediaQuery'
 import { StatusIndicator, HUDCorner } from './ui'
 import 'maplibre-gl/dist/maplibre-gl.css'
 
@@ -75,6 +76,7 @@ const MAP_STYLE = {
 function Map2DComponent() {
   const mapRef = useRef<MapRef>(null)
   const [isMapLoaded, setIsMapLoaded] = useState(false)
+  const isMobile = useIsMobile()
   const { 
     selectedDevice, 
     selectedTrip,
@@ -529,67 +531,83 @@ function Map2DComponent() {
         )}
       </Map>
 
-      {/* HUD Overlay Elements */}
+      {/* HUD Overlay Elements - Simplified for mobile */}
       
-      {/* Top-left: Mode indicator + Detection toggle */}
-      <div className="absolute top-4 left-4 z-10 space-y-2">
-        <HUDCorner color="cyan" size="sm">
-          <div className="glass-panel px-3 py-2 rounded-sm">
-            <div className="flex items-center gap-2">
-              <StatusIndicator 
-                status={isMapLoaded ? 'active' : 'processing'} 
-                size="sm" 
-              />
-              <span className="text-cyber-cyan text-xs font-mono tracking-wider">
-                2D TACTICAL VIEW
-              </span>
+      {/* Top-left: Mode indicator + Detection toggle (hidden on mobile) */}
+      {!isMobile && (
+        <div className="absolute top-4 left-4 z-10 space-y-2">
+          <HUDCorner color="cyan" size="sm">
+            <div className="glass-panel px-3 py-2 rounded-sm">
+              <div className="flex items-center gap-2">
+                <StatusIndicator 
+                  status={isMapLoaded ? 'active' : 'processing'} 
+                  size="sm" 
+                />
+                <span className="text-cyber-cyan text-xs font-mono tracking-wider">
+                  2D TACTICAL VIEW
+                </span>
+              </div>
             </div>
-          </div>
-        </HUDCorner>
-        
-        {/* Detection layer toggle */}
-        <button
-          onClick={() => setShowDetectionLayer(!showDetectionLayer)}
-          className={`
-            glass-panel px-3 py-2 rounded-sm flex items-center gap-2 transition-all
-            ${showDetectionLayer 
-              ? 'border border-cyber-magenta/50 bg-cyber-magenta/10' 
-              : 'border border-cyber-cyan/20 hover:border-cyber-cyan/40'
-            }
-          `}
-        >
-          <div className={`
-            w-3 h-3 rounded-sm border-2 flex items-center justify-center
-            ${showDetectionLayer 
-              ? 'border-cyber-magenta bg-cyber-magenta' 
-              : 'border-cyber-cyan/50'
-            }
-          `}>
-            {showDetectionLayer && (
-              <svg className="w-2 h-2 text-black" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M20.285 2l-11.285 11.567-5.286-5.011-3.714 3.716 9 8.728 15-15.285z"/>
-              </svg>
+          </HUDCorner>
+          
+          {/* Detection layer toggle */}
+          <button
+            onClick={() => setShowDetectionLayer(!showDetectionLayer)}
+            className={`
+              glass-panel px-3 py-2 rounded-sm flex items-center gap-2 transition-all
+              ${showDetectionLayer 
+                ? 'border border-cyber-magenta/50 bg-cyber-magenta/10' 
+                : 'border border-cyber-cyan/20 hover:border-cyber-cyan/40'
+              }
+            `}
+          >
+            <div className={`
+              w-3 h-3 rounded-sm border-2 flex items-center justify-center
+              ${showDetectionLayer 
+                ? 'border-cyber-magenta bg-cyber-magenta' 
+                : 'border-cyber-cyan/50'
+              }
+            `}>
+              {showDetectionLayer && (
+                <svg className="w-2 h-2 text-black" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M20.285 2l-11.285 11.567-5.286-5.011-3.714 3.716 9 8.728 15-15.285z"/>
+                </svg>
+              )}
+            </div>
+            <span className={`text-xs font-mono tracking-wider ${
+              showDetectionLayer ? 'text-cyber-magenta' : 'text-cyber-cyan/50'
+            }`}>
+              SHOW DETECTIONS
+            </span>
+            {(detectionsGeoJSON || combinedDetections) && (
+              <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono ${
+                showDetectionLayer 
+                  ? 'bg-cyber-magenta/30 text-cyber-magenta' 
+                  : 'bg-cyber-cyan/20 text-cyber-cyan/50'
+              }`}>
+                {combinedDetections?.total || detectionsData?.detections?.length || 0}
+              </span>
+            )}
+          </button>
+        </div>
+      )}
+
+      {/* Mobile: Compact top-right info */}
+      {isMobile && selectedTrip && (
+        <div className="absolute top-2 right-2 z-10">
+          <div className="glass-panel px-2 py-1 rounded-sm border border-cyber-cyan/30 text-[10px] font-mono">
+            <span className="text-cyber-cyan">{selectedTrip.date}</span>
+            {filteredData.length > 0 && (
+              <span className="text-cyber-cyan/50 ml-2">
+                {currentIndex + 1}/{filteredData.length}
+              </span>
             )}
           </div>
-          <span className={`text-xs font-mono tracking-wider ${
-            showDetectionLayer ? 'text-cyber-magenta' : 'text-cyber-cyan/50'
-          }`}>
-            SHOW DETECTIONS
-          </span>
-          {(detectionsGeoJSON || combinedDetections) && (
-            <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono ${
-              showDetectionLayer 
-                ? 'bg-cyber-magenta/30 text-cyber-magenta' 
-                : 'bg-cyber-cyan/20 text-cyber-cyan/50'
-            }`}>
-              {combinedDetections?.total || detectionsData?.detections?.length || 0}
-            </span>
-          )}
-        </button>
-      </div>
+        </div>
+      )}
 
-      {/* Top-right: Trip info */}
-      {selectedTrip && (
+      {/* Desktop: Top-right Trip info */}
+      {!isMobile && selectedTrip && (
         <div className="absolute top-4 right-14 z-10">
           <div className="glass-panel px-3 py-2 rounded-sm border border-cyber-magenta/30">
             <div className="text-[10px] text-cyber-magenta/50 mb-0.5">ACTIVE TRIP</div>
@@ -598,9 +616,9 @@ function Map2DComponent() {
         </div>
       )}
       
-      {/* Grid overlay */}
+      {/* Grid overlay - reduced opacity on mobile */}
       <div 
-        className="absolute inset-0 pointer-events-none z-[1] opacity-20"
+        className={`absolute inset-0 pointer-events-none z-[1] ${isMobile ? 'opacity-10' : 'opacity-20'}`}
         style={{
           backgroundImage: `
             linear-gradient(rgba(0, 255, 247, 0.05) 1px, transparent 1px),
@@ -610,47 +628,51 @@ function Map2DComponent() {
         }}
       />
       
-      {/* Coordinate overlay - enhanced */}
-      <div className="absolute bottom-20 left-4 z-10">
-        <HUDCorner color="cyan" size="sm" animated={false}>
-          <div className="glass-panel p-3 rounded-sm">
-            <div className="text-[10px] text-cyber-cyan/50 mb-2 tracking-wider">COORDINATES</div>
-            <div className="grid grid-cols-3 gap-4 text-xs font-mono">
-              <div>
-                <span className="text-cyber-cyan/50 block mb-0.5">LAT</span>
-                <span className="text-cyber-cyan tabular-nums">
-                  {currentPoint?.latitude.toFixed(6) || '—'}
-                </span>
-              </div>
-              <div>
-                <span className="text-cyber-cyan/50 block mb-0.5">LNG</span>
-                <span className="text-cyber-cyan tabular-nums">
-                  {currentPoint?.longitude.toFixed(6) || '—'}
-                </span>
-              </div>
-              <div>
-                <span className="text-cyber-cyan/50 block mb-0.5">ZOOM</span>
-                <span className="text-cyber-cyan tabular-nums">
-                  {mapZoom.toFixed(1)}×
-                </span>
+      {/* Coordinate overlay - hidden on mobile */}
+      {!isMobile && (
+        <div className="absolute bottom-20 left-4 z-10">
+          <HUDCorner color="cyan" size="sm" animated={false}>
+            <div className="glass-panel p-3 rounded-sm">
+              <div className="text-[10px] text-cyber-cyan/50 mb-2 tracking-wider">COORDINATES</div>
+              <div className="grid grid-cols-3 gap-4 text-xs font-mono">
+                <div>
+                  <span className="text-cyber-cyan/50 block mb-0.5">LAT</span>
+                  <span className="text-cyber-cyan tabular-nums">
+                    {currentPoint?.latitude.toFixed(6) || '—'}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-cyber-cyan/50 block mb-0.5">LNG</span>
+                  <span className="text-cyber-cyan tabular-nums">
+                    {currentPoint?.longitude.toFixed(6) || '—'}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-cyber-cyan/50 block mb-0.5">ZOOM</span>
+                  <span className="text-cyber-cyan tabular-nums">
+                    {mapZoom.toFixed(1)}×
+                  </span>
+                </div>
               </div>
             </div>
-          </div>
-        </HUDCorner>
-      </div>
+          </HUDCorner>
+        </div>
+      )}
 
-      {/* Link ID indicator */}
+      {/* Link ID indicator - compact on mobile */}
       {currentPoint?.link_id && (
-        <div className="absolute bottom-20 right-14 z-10">
-          <div className="glass-panel-magenta px-3 py-2 rounded-sm border border-cyber-magenta/30">
-            <div className="text-[10px] text-cyber-magenta/50 mb-0.5">ROAD LINK</div>
-            <div className="text-cyber-magenta text-lg font-mono font-bold">{currentPoint.link_id}</div>
+        <div className={`absolute z-10 ${isMobile ? 'bottom-2 left-2' : 'bottom-20 right-14'}`}>
+          <div className={`glass-panel-magenta border border-cyber-magenta/30 ${isMobile ? 'px-2 py-1' : 'px-3 py-2'} rounded-sm`}>
+            {!isMobile && <div className="text-[10px] text-cyber-magenta/50 mb-0.5">ROAD LINK</div>}
+            <div className={`text-cyber-magenta font-mono font-bold ${isMobile ? 'text-xs' : 'text-lg'}`}>
+              {isMobile ? `L:${currentPoint.link_id}` : currentPoint.link_id}
+            </div>
           </div>
         </div>
       )}
 
-      {/* Frame indicator */}
-      {filteredData.length > 0 && (
+      {/* Frame indicator - hidden on mobile (shown in MobileTimeline instead) */}
+      {!isMobile && filteredData.length > 0 && (
         <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10">
           <div className="glass-panel px-4 py-2 rounded-sm border border-cyber-cyan/20">
             <div className="flex items-center gap-3 text-xs font-mono">
@@ -663,9 +685,9 @@ function Map2DComponent() {
         </div>
       )}
 
-      {/* Scanline effect */}
+      {/* Scanline effect - reduced on mobile */}
       <div 
-        className="absolute inset-0 pointer-events-none z-[2] opacity-30"
+        className={`absolute inset-0 pointer-events-none z-[2] ${isMobile ? 'opacity-15' : 'opacity-30'}`}
         style={{
           background: `linear-gradient(
             to bottom,

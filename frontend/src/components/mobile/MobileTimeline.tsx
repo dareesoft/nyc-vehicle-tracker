@@ -3,6 +3,7 @@
  * Compact playback controls for mobile view
  */
 
+import { useEffect, useRef, useCallback } from 'react'
 import { useTripStore } from '../../stores/tripStore'
 
 export default function MobileTimeline() {
@@ -17,6 +18,40 @@ export default function MobileTimeline() {
     nextFrame,
     prevFrame,
   } = useTripStore()
+  
+  const playbackRef = useRef<number | null>(null)
+  const currentIndexRef = useRef(currentIndex)
+  currentIndexRef.current = currentIndex
+
+  // Stable nextFrame function using ref
+  const advanceFrame = useCallback(() => {
+    const idx = currentIndexRef.current
+    const data = getFilteredData()
+    
+    // Check if at end
+    if (idx >= data.length - 1) {
+      setIsPlaying(false)
+      return
+    }
+    
+    nextFrame()
+  }, [getFilteredData, nextFrame, setIsPlaying])
+
+  // Playback loop
+  useEffect(() => {
+    const filteredData = getFilteredData()
+    if (isPlaying && filteredData.length > 0) {
+      const baseInterval = 1000 / playbackSpeed / 2 // Base rate ~2fps, adjusted by speed
+      
+      playbackRef.current = window.setInterval(advanceFrame, baseInterval)
+      
+      return () => {
+        if (playbackRef.current) {
+          clearInterval(playbackRef.current)
+        }
+      }
+    }
+  }, [isPlaying, playbackSpeed, advanceFrame, getFilteredData])
 
   const filteredData = getFilteredData()
   const currentPoint = filteredData[currentIndex]

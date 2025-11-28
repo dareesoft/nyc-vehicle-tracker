@@ -9,6 +9,7 @@ import DeckGL from '@deck.gl/react'
 import type { PickingInfo } from '@deck.gl/core'
 import { useTripStore } from '../stores/tripStore'
 import { useTrip3D, useDetections } from '../hooks/useTrip'
+import { useIsMobile } from '../hooks/useMediaQuery'
 import {
   calculateBearing,
   interpolateBearing,
@@ -29,6 +30,7 @@ import {
 import 'maplibre-gl/dist/maplibre-gl.css'
 
 function Map3DComponent() {
+  const isMobile = useIsMobile()
   const {
     selectedDevice,
     selectedTrip,
@@ -208,21 +210,32 @@ function Map3DComponent() {
         <Map mapStyle={MAP_STYLE} />
       </DeckGL>
 
-      {/* 3D Controls */}
-      <Map3DControls
-        viewState={viewState}
-        setViewState={setViewState}
-        isPlaying={isPlaying}
-        showDetectionLayer={showDetectionLayer}
-        setShowDetectionLayer={setShowDetectionLayer}
-        detectionCount={combinedDetections?.total || detectionsData?.detections?.length || 0}
-      />
+      {/* 3D Controls - hidden on mobile */}
+      {!isMobile && (
+        <Map3DControls
+          viewState={viewState}
+          setViewState={setViewState}
+          isPlaying={isPlaying}
+          showDetectionLayer={showDetectionLayer}
+          setShowDetectionLayer={setShowDetectionLayer}
+          detectionCount={combinedDetections?.total || detectionsData?.detections?.length || 0}
+        />
+      )}
 
-      {/* Hover tooltip */}
-      {hoveredObject && <HoverTooltip data={hoveredObject} />}
+      {/* Hover tooltip - hidden on mobile */}
+      {!isMobile && hoveredObject && <HoverTooltip data={hoveredObject} />}
 
-      {/* View info */}
-      <ViewInfo viewState={viewState} segmentCount={trip3D?.paths?.length || 0} />
+      {/* View info - hidden on mobile */}
+      {!isMobile && <ViewInfo viewState={viewState} segmentCount={trip3D?.paths?.length || 0} />}
+      
+      {/* Mobile: Compact info */}
+      {isMobile && selectedTrip && (
+        <div className="absolute top-2 right-2 z-10">
+          <div className="glass-panel px-2 py-1 rounded-sm border border-cyber-magenta/30 text-[10px] font-mono">
+            <span className="text-cyber-magenta">3D • {selectedTrip.date}</span>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

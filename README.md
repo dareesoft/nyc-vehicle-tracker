@@ -12,6 +12,45 @@ NYC 차량 감시 시스템 - 차량 카메라로 수집된 이미지 데이터�
 | 💾 **메타데이터 캐싱** | EXIF 데이터에서 GPS/시간 정보 추출 및 SQLite 저장 |
 | ⏰ **스케줄러** | 매일 밤 10시(KST) 자동 데이터 스캔 |
 | 🔀 **멀티 트립 오버레이** | 여러 트립을 한 지도에 비교 표시 |
+| 📱 **반응형 UI** | 모바일/데스크톱 자동 감지, 전용 레이아웃 |
+| 🚗 **드라이빙 모드** | 자동 재생 + 헤딩업 방식 지도 회전 |
+
+---
+
+## 📱 모바일 지원
+
+모바일 디바이스에서 최적화된 UI를 제공합니다.
+
+### 레이아웃 비교
+
+| 데스크톱 | 모바일 |
+|----------|--------|
+| 3컬럼 레이아웃 (사이드바 + 맵 + 패널) | 전체화면 맵 + 바텀시트 |
+| 풀 HUD 오버레이 | 최소화된 컴팩트 HUD |
+| 키보드 단축키 | 터치 제스처 |
+
+### 모바일 UI 구조
+
+```
+┌─────────────────────────┐
+│  Mini Header (축소형)    │
+├─────────────────────────┤
+│                         │
+│    전체화면 지도         │
+│    (컴팩트 HUD)          │
+│                         │
+├─────────────────────────┤
+│  Timeline (재생 컨트롤)  │
+├─────────────────────────┤
+│  Tab Bar                │
+│  [지도] [카메라] [정보]  │
+└─────────────────────────┘
+```
+
+### 드라이빙 모드
+- ▶️ 재생 버튼으로 자동 프레임 전환
+- 속도 조절: 1×, 2×, 4×
+- 헤딩업(Heading-Up) 모드: 진행 방향이 항상 위쪽
 
 ---
 
@@ -183,43 +222,48 @@ flowchart TB
 flowchart TB
     subgraph ReactApp["🖼️ React Application"]
         MAIN["main.tsx<br/>ReactDOM.createRoot"]
-        MAIN --> APP["App.tsx<br/>메인 레이아웃"]
+        MAIN --> APP["App.tsx<br/>반응형 레이아웃 분기"]
 
-        subgraph Layout["📐 Layout Structure"]
-            direction LR
-            HEADER["Header.tsx<br/>상단 헤더"]
-            SIDEBAR["Sidebar.tsx<br/>좌측 패널"]
-            CENTER["MapView.tsx<br/>중앙 지도"]
-            RIGHT["InfoPanel.tsx<br/>우측 패널"]
-            BOTTOM["Timeline.tsx<br/>하단 타임라인"]
+        subgraph Layouts["📐 Responsive Layouts"]
+            DESKTOP["DesktopLayout.tsx<br/>━━━━━━━━━━<br/>• 3컬럼 레이아웃<br/>• 풀 HUD"]
+            MOBILE["MobileLayout.tsx<br/>━━━━━━━━━━<br/>• 전체화면 맵<br/>• 바텀시트<br/>• 탭 네비게이션"]
         end
 
         subgraph MapComponents["🗺️ Map Components"]
-            MAP2D["Map2D.tsx<br/>MapLibre GL<br/>━━━━━━━━━━<br/>• 2D 지도<br/>• GeoJSON 레이어"]
-            MAP3D["Map3D.tsx<br/>Deck.gl<br/>━━━━━━━━━━<br/>• 3D 지도<br/>• PathLayer<br/>• IconLayer"]
+            MAP2D["Map2D.tsx<br/>MapLibre GL<br/>━━━━━━━━━━<br/>• 2D 지도<br/>• 반응형 HUD"]
+            MAP3D["Map3D.tsx<br/>Deck.gl<br/>━━━━━━━━━━<br/>• 3D 지도<br/>• 헤딩업 모드"]
+        end
+
+        subgraph MobileComponents["📱 Mobile Components"]
+            MH["MobileHeader.tsx"]
+            BS["BottomSheet.tsx"]
+            TB["TabBar.tsx"]
+            MT["MobileTimeline.tsx<br/>━━━━━━━━━━<br/>• 재생 컨트롤<br/>• 자동 프레임 전환"]
         end
 
         subgraph Panels["📊 Info Panels"]
-            CAM["CameraViewer.tsx<br/>━━━━━━━━━━<br/>• 이미지 표시<br/>• 전체화면"]
-            INFO["InfoPanel.tsx<br/>━━━━━━━━━━<br/>• 텔레메트리<br/>• GPS 좌표"]
-            DET["DetectionPanel.tsx<br/>━━━━━━━━━━<br/>• YOLO 결과<br/>• bbox 오버레이"]
+            CAM["CameraViewer.tsx"]
+            INFO["InfoPanel.tsx"]
+            DET["DetectionPanel.tsx"]
         end
 
         subgraph StateManagement["🔄 State Management"]
-            ZS["Zustand<br/>tripStore.ts<br/>━━━━━━━━━━<br/>• selectedDevice<br/>• selectedTrip<br/>• currentIndex<br/>• viewMode"]
-            RQ["React Query<br/>━━━━━━━━━━<br/>• API 데이터 캐싱<br/>• 자동 리페치"]
+            ZS["Zustand tripStore.ts"]
+            RQ["React Query"]
         end
 
         subgraph CustomHooks["🪝 Custom Hooks"]
-            H1["useTrip.ts<br/>API 호출"]
-            H2["useAnimations.ts<br/>애니메이션"]
-            H3["useImagePreloader.ts<br/>이미지 프리로드"]
+            H1["useTrip.ts"]
+            H2["useMediaQuery.ts<br/>━━━━━━━━━━<br/>• useIsMobile()<br/>• useIsDesktop()"]
+            H3["useImagePreloader.ts"]
         end
     end
 
-    APP --> Layout
-    CENTER --> MapComponents
-    RIGHT --> Panels
+    APP -->|"isMobile?"| Layouts
+    DESKTOP --> MapComponents
+    MOBILE --> MapComponents
+    MOBILE --> MobileComponents
+    DESKTOP --> Panels
     APP --> StateManagement
     StateManagement --> CustomHooks
     CustomHooks -->|"HTTP"| API["FastAPI /api/*"]
@@ -251,25 +295,37 @@ nyc-vehicle-tracker/
 │   ├── tailwind.config.js
 │   ├── Dockerfile
 │   └── 📂 src/
-│       ├── App.tsx                # 메인 앱
+│       ├── App.tsx                # 반응형 레이아웃 분기
 │       ├── main.tsx               # 진입점
+│       ├── 📂 layouts/
+│       │   ├── DesktopLayout.tsx  # 데스크톱 3컬럼
+│       │   └── MobileLayout.tsx   # 모바일 전체화면
 │       ├── 📂 components/
 │       │   ├── Header.tsx
 │       │   ├── Sidebar.tsx
 │       │   ├── MapView.tsx
-│       │   ├── Map2D.tsx
-│       │   ├── Map3D.tsx
+│       │   ├── Map2D.tsx          # 반응형 HUD
+│       │   ├── Map3D.tsx          # 반응형 HUD
 │       │   ├── CameraViewer.tsx
 │       │   ├── Timeline.tsx
 │       │   ├── InfoPanel.tsx
 │       │   ├── DetectionPanel.tsx
+│       │   ├── ErrorBoundary.tsx  # 에러 처리
+│       │   ├── 📂 mobile/         # 모바일 전용
+│       │   │   ├── MobileHeader.tsx
+│       │   │   ├── BottomSheet.tsx
+│       │   │   ├── TabBar.tsx
+│       │   │   └── MobileTimeline.tsx
 │       │   └── 📂 ui/             # UI 컴포넌트
 │       ├── 📂 stores/
 │       │   └── tripStore.ts       # Zustand
 │       ├── 📂 hooks/
 │       │   ├── useTrip.ts
+│       │   ├── useMediaQuery.ts   # 반응형 감지
 │       │   ├── useAnimations.ts
 │       │   └── useImagePreloader.ts
+│       ├── 📂 types/
+│       │   └── index.ts           # 공통 타입
 │       └── 📂 styles/
 │           ├── index.css
 │           └── cyberpunk.css
