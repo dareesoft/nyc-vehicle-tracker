@@ -6,79 +6,82 @@
 import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../hooks/useAuth'
 
-// Words and items for Matrix rain
+// Words and items for Matrix rain - one item per drop
 const MATRIX_ITEMS = [
-  '다리소프트', 'ARA20', 'ARA30', 'RiaaS', 'AI', 'Edge', 'road', 'analyzer',
-  'daree', 'dareesoft', '도로', '위험 정보', '안전', 'safe road',
-  'Road hazard Information as a Service', 'Road Analyzer', 'Road Wise',
-  'Road View', 'Road Keeper', 'Road Maintenance', 'Hazard Detection',
-  'VisionX', 'Pavement Condition', 'Seoul', 'New york', 'Canada',
-  'Transportation', 'Gemini', 'Elizabeth', 'Mandella', 'dongha', 'sohee',
-  '0', '1', '2', '3', '4', '5', '6', '7', '8', '9'
+  // 한글
+  '다리소프트', '도로', '위험', '정보', '안전', '균열', '포장', '노면',
+  // English - short words
+  'ARA20', 'ARA30', 'RiaaS', 'AI', 'Edge', 'road', 'analyzer', 'daree',
+  'dareesoft', 'safe', 'road', 'hazard', 'wise', 'view', 'keeper',
+  'VisionX', 'Seoul', 'NYC', 'Canada', 'Gemini', 'Elizabeth', 'Mandella',
+  'dongha', 'sohee', 'IRI', 'PCI', 'pothole', 'crack', 'rutting',
+  'roughness', 'asphalt', 'concrete', 'defect', 'lane', 'guardrail',
+  'curb', 'bridge', 'tunnel', 'manhole', 'drainage', 'crosswalk',
+  'camera', 'dashcam', 'GPS', 'GNSS', 'RTK', 'telematics', 'IoT',
+  '5G', 'LTE', 'V2X', 'sensor', 'fusion', 'GIS', 'mapping', 'Tokyo',
+  'London', 'Singapore', 'LA', 'Chicago', 'Toronto', 'Vancouver',
+  'Berlin', 'Sydney', 'Melbourne', 'Busan', 'Incheon', 'Daegu',
+  'Pangyo', 'Bundang', 'Gangnam', 'Specter', 'Scan', 'Trace',
+  'Profile', 'Pattern', 'Evidence', 'Overwatch', 'Optic', 'Lens', 'Sensor',
+  // Numbers
+  '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
+  '42', '2001', '02', '18', '2020', '8967', '0110',
 ]
 
 function getRandomItem() {
   return MATRIX_ITEMS[Math.floor(Math.random() * MATRIX_ITEMS.length)]
 }
 
-// Matrix rain column component with changing characters
-function MatrixColumn({ left, delay, duration }: { left: string; delay: number; duration: number }) {
-  const [items, setItems] = useState<string[]>(() => 
-    Array.from({ length: 8 + Math.floor(Math.random() * 5) }, () => getRandomItem())
-  )
+// Single falling word component
+function FallingWord({ left, delay, duration }: { left: string; delay: number; duration: number }) {
+  const [word, setWord] = useState(() => getRandomItem())
 
-  // Randomly change some characters while falling
+  // Randomly change word while falling
   useEffect(() => {
     const interval = setInterval(() => {
-      setItems(prev => prev.map(item => 
-        Math.random() > 0.7 ? getRandomItem() : item
-      ))
-    }, 500 + Math.random() * 500)
+      if (Math.random() > 0.6) {
+        setWord(getRandomItem())
+      }
+    }, 800)
 
     return () => clearInterval(interval)
   }, [])
 
+  // Check if word is Korean
+  const isKorean = /[가-힣]/.test(word)
+
   return (
     <div
-      className="absolute top-0 font-mono text-xs leading-relaxed whitespace-nowrap"
+      className="absolute font-mono text-cyber-cyan whitespace-nowrap"
       style={{
         left,
-        animation: `matrix-fall ${duration}s linear infinite`,
+        top: '-50px',
+        animation: `matrix-fall-single ${duration}s linear infinite`,
         animationDelay: `${delay}s`,
         opacity: 0,
-        writingMode: 'vertical-rl',
-        textOrientation: 'mixed',
+        fontSize: word.length > 8 ? '10px' : '12px',
+        textShadow: '0 0 8px #00fff7',
+        // Korean: vertical text, English: horizontal but falling vertically
+        writingMode: isKorean ? 'vertical-rl' : 'horizontal-tb',
       }}
     >
-      {items.map((item, idx) => (
-        <div
-          key={idx}
-          className="text-cyber-cyan my-1"
-          style={{
-            opacity: 0.05 + (idx / items.length) * 0.25,
-            textShadow: idx === items.length - 1 ? '0 0 8px #00fff7' : 'none',
-            fontSize: item.length > 5 ? '8px' : '11px',
-          }}
-        >
-          {item}
-        </div>
-      ))}
+      {word}
     </div>
   )
 }
 
-// Matrix rain background
+// Matrix rain background with single words
 function MatrixRain() {
   const columns = useRef<{ id: number; left: string; delay: number; duration: number }[]>([])
   
   if (columns.current.length === 0) {
-    const numColumns = Math.floor(window.innerWidth / 60)
+    const numColumns = Math.floor(window.innerWidth / 80) // Wider spacing
     for (let i = 0; i < numColumns; i++) {
       columns.current.push({
         id: i,
         left: `${(i / numColumns) * 100}%`,
-        delay: Math.random() * 10,
-        duration: 12 + Math.random() * 8, // Slower: 12-20 seconds (doubled from 6-10)
+        delay: Math.random() * 15,
+        duration: 8 + Math.random() * 8, // 8-16 seconds
       })
     }
   }
@@ -86,7 +89,7 @@ function MatrixRain() {
   return (
     <div className="absolute inset-0 overflow-hidden pointer-events-none">
       {columns.current.map((col) => (
-        <MatrixColumn
+        <FallingWord
           key={col.id}
           left={col.left}
           delay={col.delay}
@@ -436,19 +439,22 @@ export default function LoginPage() {
 
       {/* Custom CSS for animations */}
       <style>{`
-        @keyframes matrix-fall {
+        @keyframes matrix-fall-single {
           0% { 
-            transform: translateY(-100%);
+            transform: translateY(0);
             opacity: 0;
           }
           5% {
-            opacity: 1;
+            opacity: 0.3;
+          }
+          50% {
+            opacity: 0.2;
           }
           95% {
-            opacity: 1;
+            opacity: 0.1;
           }
           100% { 
-            transform: translateY(100vh);
+            transform: translateY(calc(100vh + 50px));
             opacity: 0;
           }
         }
