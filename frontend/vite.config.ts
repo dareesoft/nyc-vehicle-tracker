@@ -5,7 +5,7 @@ export default defineConfig({
   plugins: [react()],
   server: {
     host: true, // Listen on all network interfaces (0.0.0.0)
-    port: 3000,
+    port: 3001,
     allowedHosts: [
       'for.dareesoft.ai' // add your hostname here
     ],
