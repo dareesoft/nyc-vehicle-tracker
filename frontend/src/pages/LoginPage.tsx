@@ -39,9 +39,11 @@ function getRandomWords(): string[] {
   return Array.from({ length: count }, () => getRandomWord())
 }
 
-// Calculate total character count from words array
+// Calculate total character count from words array (including gaps)
 function getTotalLength(words: string[]): number {
-  return words.reduce((sum, word) => sum + word.length, 0)
+  const charCount = words.reduce((sum, word) => sum + word.length, 0)
+  const gapCount = words.length  // 1 gap after each word
+  return charCount + gapCount
 }
 
 interface Drop {
@@ -119,30 +121,29 @@ function MatrixCanvas() {
 
         ctx.font = `${fontSize}px "Courier New", monospace`
 
-        // Flatten all words into single character array with positions
-        let globalCharIndex = 0
-        const totalChars = drop.totalLength
+        // Draw words with gaps between them
+        let yOffset = 0
+        const totalSlots = drop.totalLength  // includes gaps
 
         drop.words.forEach((word) => {
           const chars = word.split('')
           
-          chars.forEach((char) => {
-            const charY = drop.y + globalCharIndex * charHeight
+          chars.forEach((char, charIndex) => {
+            const charY = drop.y + yOffset * charHeight
 
             // Only draw if on screen
             if (charY >= -charHeight && charY <= canvas.height + charHeight) {
               // Brightness: top (dark) → bottom (bright)
-              // globalCharIndex / totalChars goes from 0 to 1
-              const brightness = 0.15 + (globalCharIndex / totalChars) * 0.85
+              const brightness = 0.15 + (yOffset / totalSlots) * 0.85
               const opacity = brightness * baseOpacity
 
-              // Last character gets glow effect
-              const isLastChar = globalCharIndex === totalChars - 1
+              // Last character of each word gets glow effect
+              const isLastCharOfWord = charIndex === chars.length - 1
 
-              if (isLastChar) {
-                ctx.shadowBlur = 15
+              if (isLastCharOfWord) {
+                ctx.shadowBlur = 12
                 ctx.shadowColor = '#00fff7'
-                ctx.fillStyle = `rgba(220, 255, 255, ${opacity})`
+                ctx.fillStyle = `rgba(200, 255, 255, ${opacity})`
               } else {
                 ctx.shadowBlur = 0
                 ctx.fillStyle = `rgba(0, 255, 247, ${opacity})`
@@ -151,8 +152,11 @@ function MatrixCanvas() {
               ctx.fillText(char, drop.x, charY)
             }
 
-            globalCharIndex++
+            yOffset++
           })
+          
+          // Add 1 character gap after each word
+          yOffset++
         })
 
         ctx.shadowBlur = 0
