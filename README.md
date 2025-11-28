@@ -14,7 +14,7 @@ NYC 차량 감시 시스템 - 차량 카메라로 수집된 이미지 데이터�
 | 🔀 **멀티 트립 오버레이** | 여러 트립을 한 지도에 비교 표시 |
 | 📱 **반응형 UI** | 모바일/데스크톱 자동 감지, 전용 레이아웃 |
 | 🚗 **드라이빙 모드** | 자동 재생 + 헤딩업 방식 지도 회전 |
-| 🔐 **접근 제어** | Nginx Basic Authentication으로 사이트 보호 |
+| 🔐 **접근 제어** | 커스텀 사이버펑크 테마 로그인 페이지 |
 
 ---
 
@@ -55,52 +55,47 @@ NYC 차량 감시 시스템 - 차량 카메라로 수집된 이미지 데이터�
 
 ---
 
-## 🔐 보안 (Authentication)
 
-Nginx Basic Authentication으로 사이트 접근을 제어합니다.
 
 ```mermaid
 sequenceDiagram
     participant B as Browser
-    participant N as Nginx
     participant F as Frontend
     participant A as Backend API
 
-    B->>N: GET /
-    N-->>B: 401 Unauthorized (WWW-Authenticate)
-    B->>B: 로그인 팝업 표시
-    B->>N: GET / (Authorization: Basic xxx)
-    N->>N: .htpasswd 검증
-    N->>F: Proxy Pass
-    F-->>N: HTML/JS
-    N-->>B: 200 OK (사이트 표시)
-    
-    B->>N: GET /api/devices (Authorization: Basic xxx)
-    N->>A: Proxy Pass
-    A-->>N: JSON
-    N-->>B: 200 OK
+    B->>F: GET /
+    F->>F: 토큰 확인 (localStorage)
+    alt 토큰 없음/만료
+        F-->>B: LoginPage 표시
+        B->>B: ID/PW 입력
+        B->>A: POST /api/auth/login
+        A-->>B: {token, user, expiresAt}
+        B->>B: localStorage 저장
+        B->>B: "AUTHENTICATING..." 애니메이션
+        B->>B: 부팅 시퀀스 표시
+        F-->>B: 메인 앱 표시
+    else 유효한 토큰
+        B->>A: GET /api/auth/verify
+        A-->>B: 200 OK
+        F-->>B: 메인 앱 표시
+    end
 ```
 
-### 설정 파일
+### API 엔드포인트
+| Method | Endpoint | 설명 |
+|--------|----------|------|
+| `POST` | `/api/auth/login` | 로그인 (ID/PW → 토큰 발급) |
+| `GET` | `/api/auth/verify` | 토큰 검증 |
+| `POST` | `/api/auth/logout` | 로그아웃 (토큰 무효화) |
+
+### 관련 파일
 | 파일 | 설명 |
 |------|------|
-| `nginx/.htpasswd` | 암호화된 사용자 비밀번호 |
-| `nginx/nginx.conf` | Nginx 설정 (auth_basic 활성화) |
-| `nginx/Dockerfile` | Nginx 컨테이너 이미지 |
-
-### 사용자 추가/변경
-```bash
-# 새 사용자 추가
-htpasswd nginx/.htpasswd newuser
-
-# 또는 openssl 사용
-echo "newuser:$(openssl passwd -apr1 'password')" >> nginx/.htpasswd
-
-# 컨테이너 재빌드
-docker build -t nyc-tracker-nginx nginx/
-docker rm -f nyc-tracker-nginx
-docker run -d --name nyc-tracker-nginx --add-host=host.docker.internal:host-gateway -p 80:80 nyc-tracker-nginx
-```
+| `frontend/src/pages/LoginPage.tsx` | 로그인 UI + Matrix Rain 배경 |
+| `frontend/src/hooks/useAuth.tsx` | 인증 상태 관리 (Context API) |
+| `frontend/src/components/BootSequence.tsx` | 부팅 시퀀스 애니메이션 |
+| `frontend/src/components/LogoutConfirmModal.tsx` | 로그아웃 확인 모달 |
+| `backend/main.py` | 인증 API 엔드포인트 |
 
 ---
 
@@ -273,8 +268,14 @@ flowchart TB
 ```mermaid
 flowchart TB
     subgraph ReactApp["🖼️ React Application"]
-        MAIN["main.tsx<br/>ReactDOM.createRoot"]
-        MAIN --> APP["App.tsx<br/>반응형 레이아웃 분기"]
+        MAIN["main.tsx<br/>ReactDOM.createRoot<br/>+ AuthProvider"]
+        MAIN --> APP["App.tsx<br/>인증 체크 + 반응형 분기"]
+
+        subgraph Auth["🔐 Authentication"]
+            LOGIN["LoginPage.tsx<br/>━━━━━━━━━━<br/>• Matrix Rain 배경<br/>• 글리치 효과<br/>• 타이핑 애니메이션"]
+            BOOT["BootSequence.tsx<br/>━━━━━━━━━━<br/>• 부팅 애니메이션"]
+            LOGOUT["LogoutConfirmModal.tsx"]
+        end
 
         subgraph Layouts["📐 Responsive Layouts"]
             DESKTOP["DesktopLayout.tsx<br/>━━━━━━━━━━<br/>• 3컬럼 레이아웃<br/>• 풀 HUD"]
@@ -282,15 +283,15 @@ flowchart TB
         end
 
         subgraph MapComponents["🗺️ Map Components"]
-            MAP2D["Map2D.tsx<br/>MapLibre GL<br/>━━━━━━━━━━<br/>• 2D 지도<br/>• 반응형 HUD"]
-            MAP3D["Map3D.tsx<br/>Deck.gl<br/>━━━━━━━━━━<br/>• 3D 지도<br/>• 헤딩업 모드"]
+            MAP2D["Map2D.tsx<br/>MapLibre GL"]
+            MAP3D["Map3D.tsx<br/>Deck.gl"]
         end
 
         subgraph MobileComponents["📱 Mobile Components"]
             MH["MobileHeader.tsx"]
             BS["BottomSheet.tsx"]
             TB["TabBar.tsx"]
-            MT["MobileTimeline.tsx<br/>━━━━━━━━━━<br/>• 재생 컨트롤<br/>• 자동 프레임 전환"]
+            MT["MobileTimeline.tsx"]
         end
 
         subgraph Panels["📊 Info Panels"]
@@ -302,23 +303,20 @@ flowchart TB
         subgraph StateManagement["🔄 State Management"]
             ZS["Zustand tripStore.ts"]
             RQ["React Query"]
-        end
-
-        subgraph CustomHooks["🪝 Custom Hooks"]
-            H1["useTrip.ts"]
-            H2["useMediaQuery.ts<br/>━━━━━━━━━━<br/>• useIsMobile()<br/>• useIsDesktop()"]
-            H3["useImagePreloader.ts"]
+            AUTH["useAuth.tsx<br/>━━━━━━━━━━<br/>• AuthContext<br/>• 토큰 관리"]
         end
     end
 
-    APP -->|"isMobile?"| Layouts
+    APP -->|"!isAuthenticated"| Auth
+    APP -->|"isAuthenticated + isMobile"| MOBILE
+    APP -->|"isAuthenticated + !isMobile"| DESKTOP
+    LOGIN --> BOOT
     DESKTOP --> MapComponents
     MOBILE --> MapComponents
     MOBILE --> MobileComponents
     DESKTOP --> Panels
     APP --> StateManagement
-    StateManagement --> CustomHooks
-    CustomHooks -->|"HTTP"| API["FastAPI /api/*"]
+    StateManagement -->|"HTTP"| API["FastAPI /api/*"]
 ```
 
 ---
@@ -347,8 +345,10 @@ nyc-vehicle-tracker/
 │   ├── tailwind.config.js
 │   ├── Dockerfile
 │   └── 📂 src/
-│       ├── App.tsx                # 반응형 레이아웃 분기
-│       ├── main.tsx               # 진입점
+│       ├── App.tsx                # 인증 + 반응형 분기
+│       ├── main.tsx               # 진입점 + AuthProvider
+│       ├── 📂 pages/
+│       │   └── LoginPage.tsx      # 커스텀 로그인 + Matrix Rain
 │       ├── 📂 layouts/
 │       │   ├── DesktopLayout.tsx  # 데스크톱 3컬럼
 │       │   └── MobileLayout.tsx   # 모바일 전체화면
@@ -363,6 +363,8 @@ nyc-vehicle-tracker/
 │       │   ├── InfoPanel.tsx
 │       │   ├── DetectionPanel.tsx
 │       │   ├── ErrorBoundary.tsx  # 에러 처리
+│       │   ├── BootSequence.tsx   # 부팅 애니메이션
+│       │   ├── LogoutConfirmModal.tsx  # 로그아웃 확인
 │       │   ├── 📂 mobile/         # 모바일 전용
 │       │   │   ├── MobileHeader.tsx
 │       │   │   ├── BottomSheet.tsx
@@ -373,6 +375,7 @@ nyc-vehicle-tracker/
 │       │   └── tripStore.ts       # Zustand
 │       ├── 📂 hooks/
 │       │   ├── useTrip.ts
+│       │   ├── useAuth.tsx        # 인증 Context + Hook
 │       │   ├── useMediaQuery.ts   # 반응형 감지
 │       │   ├── useAnimations.ts
 │       │   └── useImagePreloader.ts
@@ -476,6 +479,9 @@ npm run dev
 
 | Method | Endpoint | 설명 |
 |--------|----------|------|
+| `POST` | `/api/auth/login` | 로그인 |
+| `GET` | `/api/auth/verify` | 토큰 검증 |
+| `POST` | `/api/auth/logout` | 로그아웃 |
 | `GET` | `/api/health` | 헬스 체크 |
 | `GET` | `/api/devices` | 디바이스 목록 |
 | `GET` | `/api/trips/{device_id}` | 트립 목록 |

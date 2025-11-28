@@ -9,7 +9,8 @@ import { useAuth } from '../hooks/useAuth'
 // Words and items for Matrix rain
 const MATRIX_ITEMS = [
   // 한글
-  '다리소프트', '도로', '위험', '정보', '안전', '균열', '포장', '노면',
+  '다리소프트', '다리', '도로', '위험', '정보', '안전', '균열', '포장', '노면', '유지보수', '시설물', '관리',
+  '교통', '환경',
   // English - short words
   'ARA20', 'ARA30', 'RiaaS', 'AI', 'Edge', 'road', 'analyzer', 'daree',
   'dareesoft', 'safe', 'road', 'hazard', 'wise', 'view', 'keeper',
@@ -21,11 +22,14 @@ const MATRIX_ITEMS = [
   '5G', 'LTE', 'V2X', 'sensor', 'fusion', 'GIS', 'mapping', 'Tokyo',
   'London', 'Singapore', 'LA', 'Chicago', 'Toronto', 'Vancouver',
   'Berlin', 'Sydney', 'Melbourne', 'Busan', 'Incheon', 'Daegu',
-  'Pangyo', 'Bundang', 'Gangnam', 'Specter', 'Scan', 'Trace',
+  'Bundang', 'Gangnam', 'Specter', 'Scan', 'Trace',
   'Profile', 'Pattern', 'Evidence', 'Overwatch', 'Optic', 'Lens', 'Sensor',
+  'detection', 'inference', 'digital twin', 'hazardmap', 'debris', 'DOT', 'ITS', 'FHWA', 
+  'speed', 'limit', 'sign', 'warning', 'alert', 'danger', 'speed-limit-sign', 'road-sign',
   // Numbers
-  '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
+  '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '01',
   '42', '2001', '02', '18', '2020', '8967', '0110',
+  '192', '168', '205', '3001'
 ]
 
 // Get random word from MATRIX_ITEMS
