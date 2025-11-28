@@ -65,28 +65,30 @@ function MatrixCanvas() {
 
   const initDrops = useCallback((width: number, height: number) => {
     const drops: Drop[] = []
-    const columnWidth = 50 // spacing between columns
+    const columnWidth = 70 // wider spacing between columns
     const numColumns = Math.ceil(width / columnWidth)
 
     for (let i = 0; i < numColumns; i++) {
-      // Front layer drop
-      drops.push({
-        x: i * columnWidth + columnWidth / 2,
-        y: Math.random() * height * -1, // Start above screen
-        speed: 2 + Math.random() * 3, // 2-5 px per frame
-        length: 8 + Math.floor(Math.random() * 12), // 8-20 chars
-        chars: Array.from({ length: 20 }, () => getRandomChar()),
-        layer: 'front',
-      })
+      // Front layer drop - only 70% of columns
+      if (Math.random() > 0.3) {
+        drops.push({
+          x: i * columnWidth + columnWidth / 2,
+          y: Math.random() * height * -1, // Start above screen
+          speed: 1.5 + Math.random() * 2, // Slower: 1.5-3.5 px per frame
+          length: 6 + Math.floor(Math.random() * 8), // Shorter: 6-14 chars
+          chars: Array.from({ length: 15 }, () => getRandomChar()),
+          layer: 'front',
+        })
+      }
 
-      // Back layer drop (only some columns)
-      if (Math.random() > 0.4) {
+      // Back layer drop - only 30% of columns
+      if (Math.random() > 0.7) {
         drops.push({
           x: i * columnWidth + columnWidth / 4,
           y: Math.random() * height * -1 - height / 2,
-          speed: 1 + Math.random() * 1.5, // Slower: 1-2.5 px per frame
-          length: 5 + Math.floor(Math.random() * 8), // Shorter: 5-13 chars
-          chars: Array.from({ length: 15 }, () => getRandomChar()),
+          speed: 0.8 + Math.random() * 1, // Slower: 0.8-1.8 px per frame
+          length: 4 + Math.floor(Math.random() * 5), // Shorter: 4-9 chars
+          chars: Array.from({ length: 10 }, () => getRandomChar()),
           layer: 'back',
         })
       }
@@ -114,8 +116,8 @@ function MatrixCanvas() {
 
     // Animation loop
     const animate = () => {
-      // Trail effect: semi-transparent overlay
-      ctx.fillStyle = 'rgba(13, 10, 57, 0.05)'
+      // Trail effect: semi-transparent overlay (higher alpha = faster fade)
+      ctx.fillStyle = 'rgba(10, 10, 15, 0.15)'
       ctx.fillRect(0, 0, canvas.width, canvas.height)
 
       const charHeight = 18 // Vertical spacing between characters
@@ -348,7 +350,7 @@ export default function LoginPage() {
       relative overflow-hidden
       ${showGlitch ? 'animate-glitch-shake' : ''}
     `}
-    style={{ background: 'rgb(13, 10, 57)' }}
+    style={{ background: '#0a0a0f' }}
     >
       {/* Canvas Matrix rain background */}
       <MatrixCanvas />
@@ -384,7 +386,7 @@ export default function LoginPage() {
         <div 
           className="absolute inset-0"
           style={{
-            background: 'radial-gradient(circle at center, transparent 30%, rgb(13, 10, 57) 100%)',
+            background: 'radial-gradient(circle at center, transparent 30%, #0a0a0f 100%)',
             opacity: 0.7,
           }}
         />
