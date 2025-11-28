@@ -14,6 +14,7 @@ NYC 차량 감시 시스템 - 차량 카메라로 수집된 이미지 데이터�
 | 🔀 **멀티 트립 오버레이** | 여러 트립을 한 지도에 비교 표시 |
 | 📱 **반응형 UI** | 모바일/데스크톱 자동 감지, 전용 레이아웃 |
 | 🚗 **드라이빙 모드** | 자동 재생 + 헤딩업 방식 지도 회전 |
+| 🔐 **접근 제어** | Nginx Basic Authentication으로 사이트 보호 |
 
 ---
 
@@ -54,6 +55,55 @@ NYC 차량 감시 시스템 - 차량 카메라로 수집된 이미지 데이터�
 
 ---
 
+## 🔐 보안 (Authentication)
+
+Nginx Basic Authentication으로 사이트 접근을 제어합니다.
+
+```mermaid
+sequenceDiagram
+    participant B as Browser
+    participant N as Nginx
+    participant F as Frontend
+    participant A as Backend API
+
+    B->>N: GET /
+    N-->>B: 401 Unauthorized (WWW-Authenticate)
+    B->>B: 로그인 팝업 표시
+    B->>N: GET / (Authorization: Basic xxx)
+    N->>N: .htpasswd 검증
+    N->>F: Proxy Pass
+    F-->>N: HTML/JS
+    N-->>B: 200 OK (사이트 표시)
+    
+    B->>N: GET /api/devices (Authorization: Basic xxx)
+    N->>A: Proxy Pass
+    A-->>N: JSON
+    N-->>B: 200 OK
+```
+
+### 설정 파일
+| 파일 | 설명 |
+|------|------|
+| `nginx/.htpasswd` | 암호화된 사용자 비밀번호 |
+| `nginx/nginx.conf` | Nginx 설정 (auth_basic 활성화) |
+| `nginx/Dockerfile` | Nginx 컨테이너 이미지 |
+
+### 사용자 추가/변경
+```bash
+# 새 사용자 추가
+htpasswd nginx/.htpasswd newuser
+
+# 또는 openssl 사용
+echo "newuser:$(openssl passwd -apr1 'password')" >> nginx/.htpasswd
+
+# 컨테이너 재빌드
+docker build -t nyc-tracker-nginx nginx/
+docker rm -f nyc-tracker-nginx
+docker run -d --name nyc-tracker-nginx --add-host=host.docker.internal:host-gateway -p 80:80 nyc-tracker-nginx
+```
+
+---
+
 ## 🏗️ 시스템 아키텍처
 
 ### 1. 전체 시스템 아키텍처
@@ -64,16 +114,17 @@ flowchart LR
         BROWSER["Web Browser<br/>(React SPA)"]
     end
 
-    subgraph Docker["🐳 Docker Compose"]
-        subgraph NGINX["🌐 Nginx Reverse Proxy"]
-            RP["nginx<br/>:80 → frontend<br/>/api → backend"]
+    subgraph Docker["🐳 Docker"]
+        subgraph NGINX["🌐 Nginx Reverse Proxy :80"]
+            AUTH["🔐 Basic Auth<br/>(.htpasswd)"]
+            RP["Routing<br/>/ → frontend<br/>/api → backend"]
         end
 
-        subgraph FRONTEND["🖼️ Frontend Container :3000"]
+        subgraph FRONTEND["🖼️ Frontend :3001"]
             REACT["React 18 + TypeScript<br/>Vite + Tailwind CSS"]
         end
 
-        subgraph BACKEND["⚙️ Backend Container :8000"]
+        subgraph BACKEND["⚙️ Backend :8000"]
             FASTAPI["FastAPI<br/>Python 3.11"]
         end
     end
@@ -84,7 +135,8 @@ flowchart LR
         YOLO["🤖 YOLO Weights<br/>speed_sign_detector.pt"]
     end
 
-    BROWSER --> RP
+    BROWSER -->|"ID/PW"| AUTH
+    AUTH --> RP
     RP --> REACT
     RP --> FASTAPI
     FASTAPI --> DB
@@ -331,7 +383,9 @@ nyc-vehicle-tracker/
 │           └── cyberpunk.css
 │
 ├── 📂 nginx/
-│   └── nginx.conf
+│   ├── nginx.conf             # Nginx 설정 + Basic Auth
+│   ├── .htpasswd              # 사용자 비밀번호
+│   └── Dockerfile             # Nginx 이미지
 │
 ├── docker-compose.yml
 ├── Makefile
