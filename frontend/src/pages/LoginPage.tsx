@@ -3,10 +3,10 @@
  * Themed access terminal with glitch effects and neon glow
  */
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useAuth } from '../hooks/useAuth'
 
-// Words and items for Matrix rain - one item per drop
+// Words and items for Matrix rain
 const MATRIX_ITEMS = [
   // 한글
   '다리소프트', '도로', '위험', '정보', '안전', '균열', '포장', '노면',
@@ -28,86 +28,181 @@ const MATRIX_ITEMS = [
   '42', '2001', '02', '18', '2020', '8967', '0110',
 ]
 
-function getRandomItem() {
-  return MATRIX_ITEMS[Math.floor(Math.random() * MATRIX_ITEMS.length)]
+// Get all individual characters from MATRIX_ITEMS
+const MATRIX_CHARS: string[] = []
+MATRIX_ITEMS.forEach(item => {
+  if (/[가-힣]/.test(item)) {
+    // Korean: add each character separately
+    item.split('').forEach(char => {
+      if (!MATRIX_CHARS.includes(char)) MATRIX_CHARS.push(char)
+    })
+  } else {
+    // English/Numbers: add each character
+    item.split('').forEach(char => {
+      if (!MATRIX_CHARS.includes(char)) MATRIX_CHARS.push(char)
+    })
+  }
+})
+
+function getRandomChar(): string {
+  return MATRIX_CHARS[Math.floor(Math.random() * MATRIX_CHARS.length)]
 }
 
-// Single falling word component
-function FallingWord({ left, delay, duration }: { left: string; delay: number; duration: number }) {
-  const [word, setWord] = useState(() => getRandomItem())
+interface Drop {
+  x: number
+  y: number
+  speed: number
+  length: number
+  chars: string[]
+  layer: 'front' | 'back'
+}
 
-  // Randomly change word while falling
-  useEffect(() => {
-    const interval = setInterval(() => {
-      if (Math.random() > 0.6) {
-        setWord(getRandomItem())
+// Canvas-based Matrix Rain
+function MatrixCanvas() {
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const dropsRef = useRef<Drop[]>([])
+  const animationRef = useRef<number>(0)
+
+  const initDrops = useCallback((width: number, height: number) => {
+    const drops: Drop[] = []
+    const columnWidth = 50 // spacing between columns
+    const numColumns = Math.ceil(width / columnWidth)
+
+    for (let i = 0; i < numColumns; i++) {
+      // Front layer drop
+      drops.push({
+        x: i * columnWidth + columnWidth / 2,
+        y: Math.random() * height * -1, // Start above screen
+        speed: 2 + Math.random() * 3, // 2-5 px per frame
+        length: 8 + Math.floor(Math.random() * 12), // 8-20 chars
+        chars: Array.from({ length: 20 }, () => getRandomChar()),
+        layer: 'front',
+      })
+
+      // Back layer drop (only some columns)
+      if (Math.random() > 0.4) {
+        drops.push({
+          x: i * columnWidth + columnWidth / 4,
+          y: Math.random() * height * -1 - height / 2,
+          speed: 1 + Math.random() * 1.5, // Slower: 1-2.5 px per frame
+          length: 5 + Math.floor(Math.random() * 8), // Shorter: 5-13 chars
+          chars: Array.from({ length: 15 }, () => getRandomChar()),
+          layer: 'back',
+        })
       }
-    }, 800)
+    }
 
-    return () => clearInterval(interval)
+    dropsRef.current = drops
   }, [])
 
-  // Check if word is Korean
-  const isKorean = /[가-힣]/.test(word)
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
 
-  return (
-    <div
-      className="absolute font-mono text-cyber-cyan flex flex-col items-center"
-      style={{
-        left,
-        top: '-50px',
-        animation: `matrix-fall-single ${duration}s linear infinite`,
-        animationDelay: `${delay}s`,
-        opacity: 0,
-        textShadow: '0 0 8px #00fff7',
-      }}
-    >
-      {isKorean ? (
-        // Korean: use writing-mode for proper vertical text
-        <span style={{ writingMode: 'vertical-rl', fontSize: '12px' }}>{word}</span>
-      ) : (
-        // English/Numbers: split into individual characters vertically
-        word.split('').map((char, idx) => (
-          <span 
-            key={idx} 
-            className="leading-tight"
-            style={{ fontSize: word.length > 8 ? '10px' : '12px' }}
-          >
-            {char}
-          </span>
-        ))
-      )}
-    </div>
-  )
-}
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
 
-// Matrix rain background with single words
-function MatrixRain() {
-  const columns = useRef<{ id: number; left: string; delay: number; duration: number }[]>([])
-  
-  if (columns.current.length === 0) {
-    const numColumns = Math.floor(window.innerWidth / 80) // Wider spacing
-    for (let i = 0; i < numColumns; i++) {
-      columns.current.push({
-        id: i,
-        left: `${(i / numColumns) * 100}%`,
-        delay: Math.random() * 15,
-        duration: 8 + Math.random() * 8, // 8-16 seconds
-      })
+    // Handle resize
+    const handleResize = () => {
+      canvas.width = window.innerWidth
+      canvas.height = window.innerHeight
+      initDrops(canvas.width, canvas.height)
     }
-  }
+
+    handleResize()
+    window.addEventListener('resize', handleResize)
+
+    // Animation loop
+    const animate = () => {
+      // Trail effect: semi-transparent overlay
+      ctx.fillStyle = 'rgba(13, 10, 57, 0.05)'
+      ctx.fillRect(0, 0, canvas.width, canvas.height)
+
+      const charHeight = 18 // Vertical spacing between characters
+
+      dropsRef.current.forEach((drop) => {
+        const isBack = drop.layer === 'back'
+        const fontSize = isBack ? 11 : 14
+        const baseOpacity = isBack ? 0.4 : 1
+
+        ctx.font = `${fontSize}px "Courier New", monospace`
+
+        // Draw each character in the trail
+        for (let i = 0; i < drop.length; i++) {
+          const charY = drop.y - i * charHeight
+          
+          // Skip if off screen
+          if (charY < -charHeight || charY > canvas.height + charHeight) continue
+
+          // Calculate opacity: head is brightest, fades towards tail
+          const fadeRatio = 1 - (i / drop.length)
+          const opacity = fadeRatio * fadeRatio * baseOpacity // Quadratic falloff
+
+          // Character morphing: ~5% chance per frame
+          if (Math.random() < 0.05) {
+            drop.chars[i] = getRandomChar()
+          }
+
+          const char = drop.chars[i] || getRandomChar()
+
+          if (i === 0) {
+            // Head character: bright white/cyan with glow
+            ctx.shadowBlur = 15
+            ctx.shadowColor = '#00fff7'
+            ctx.fillStyle = `rgba(255, 255, 255, ${opacity})`
+          } else if (i === 1) {
+            // Second character: bright cyan
+            ctx.shadowBlur = 10
+            ctx.shadowColor = '#00fff7'
+            ctx.fillStyle = `rgba(0, 255, 247, ${opacity})`
+          } else {
+            // Tail characters: fading cyan
+            ctx.shadowBlur = 0
+            ctx.fillStyle = `rgba(0, 255, 247, ${opacity * 0.8})`
+          }
+
+          ctx.fillText(char, drop.x, charY)
+        }
+
+        // Reset shadow
+        ctx.shadowBlur = 0
+
+        // Update position
+        drop.y += drop.speed
+
+        // Reset when completely off screen
+        if (drop.y - drop.length * charHeight > canvas.height) {
+          drop.y = -drop.length * charHeight - Math.random() * 200
+          drop.speed = drop.layer === 'back' 
+            ? 1 + Math.random() * 1.5 
+            : 2 + Math.random() * 3
+          drop.length = drop.layer === 'back'
+            ? 5 + Math.floor(Math.random() * 8)
+            : 8 + Math.floor(Math.random() * 12)
+          // Refresh characters
+          drop.chars = Array.from({ length: 20 }, () => getRandomChar())
+        }
+      })
+
+      animationRef.current = requestAnimationFrame(animate)
+    }
+
+    // Start animation
+    animationRef.current = requestAnimationFrame(animate)
+
+    // Cleanup
+    return () => {
+      window.removeEventListener('resize', handleResize)
+      cancelAnimationFrame(animationRef.current)
+    }
+  }, [initDrops])
 
   return (
-    <div className="absolute inset-0 overflow-hidden pointer-events-none">
-      {columns.current.map((col) => (
-        <FallingWord
-          key={col.id}
-          left={col.left}
-          delay={col.delay}
-          duration={col.duration}
-        />
-      ))}
-    </div>
+    <canvas
+      ref={canvasRef}
+      className="absolute inset-0 pointer-events-none"
+      style={{ background: 'transparent' }}
+    />
   )
 }
 
@@ -151,7 +246,10 @@ function AuthenticatingOverlay({ onComplete }: { onComplete: () => void }) {
       transition-opacity duration-1000
       ${isFadingOut ? 'opacity-0' : 'opacity-100'}
     `}>
-      <div className="text-center">
+      {/* Matrix rain in auth overlay too */}
+      <MatrixCanvas />
+      
+      <div className="text-center relative z-10">
         <div className="cyber-spinner mx-auto mb-6 w-16 h-16" />
         <p className="text-cyber-cyan font-mono text-2xl tracking-widest">
           {text}
@@ -246,14 +344,16 @@ export default function LoginPage() {
 
   return (
     <div className={`
-      min-h-screen bg-cyber-black flex items-center justify-center p-4
+      min-h-screen flex items-center justify-center p-4
       relative overflow-hidden
       ${showGlitch ? 'animate-glitch-shake' : ''}
-    `}>
-      {/* Matrix rain background */}
-      <MatrixRain />
+    `}
+    style={{ background: 'rgb(13, 10, 57)' }}
+    >
+      {/* Canvas Matrix rain background */}
+      <MatrixCanvas />
       
-      {/* Animated background */}
+      {/* Animated background overlays */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         {/* Grid pattern */}
         <div 
@@ -280,8 +380,14 @@ export default function LoginPage() {
           }}
         />
         
-        {/* Radial gradient */}
-        <div className="absolute inset-0 bg-gradient-radial from-transparent via-transparent to-cyber-black opacity-90" />
+        {/* Radial vignette */}
+        <div 
+          className="absolute inset-0"
+          style={{
+            background: 'radial-gradient(circle at center, transparent 30%, rgb(13, 10, 57) 100%)',
+            opacity: 0.7,
+          }}
+        />
       </div>
 
       {/* Login container */}
@@ -450,26 +556,6 @@ export default function LoginPage() {
 
       {/* Custom CSS for animations */}
       <style>{`
-        @keyframes matrix-fall-single {
-          0% { 
-            transform: translateY(0);
-            opacity: 0;
-          }
-          5% {
-            opacity: 0.3;
-          }
-          50% {
-            opacity: 0.2;
-          }
-          95% {
-            opacity: 0.1;
-          }
-          100% { 
-            transform: translateY(calc(100vh + 50px));
-            opacity: 0;
-          }
-        }
-        
         .glitch-text {
           animation: glitch 0.3s ease infinite;
         }
@@ -490,10 +576,6 @@ export default function LoginPage() {
           0%, 100% { transform: translateX(0); }
           25% { transform: translateX(-5px); }
           75% { transform: translateX(5px); }
-        }
-        
-        .bg-gradient-radial {
-          background: radial-gradient(circle at center, var(--tw-gradient-from), var(--tw-gradient-via), var(--tw-gradient-to));
         }
       `}</style>
     </div>
