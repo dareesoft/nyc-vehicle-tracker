@@ -1,11 +1,14 @@
+import { useState } from 'react'
 import { useTripStore } from '../stores/tripStore'
 import { useStats } from '../hooks/useTrip'
 import { useGlitch } from '../hooks/useAnimations'
 import { useAuth } from '../hooks/useAuth'
 import { AnimatedNumber, GlitchText, StatusIndicator, HUDCorner } from './ui'
 import NotificationPanel from './NotificationPanel'
+import LogoutConfirmModal from './LogoutConfirmModal'
 
 export default function Header() {
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
   const { viewMode, setViewMode, setShowTripSelector, selectedTrips, combinedRoutes } = useTripStore()
   const { data: stats } = useStats()
   const { isGlitching, triggerGlitch } = useGlitch()
@@ -16,9 +19,18 @@ export default function Header() {
     setViewMode(mode)
   }
 
-  const handleLogout = async () => {
+  const handleLogoutClick = () => {
+    setShowLogoutConfirm(true)
+  }
+
+  const handleLogoutConfirm = async () => {
     triggerGlitch()
+    setShowLogoutConfirm(false)
     await logout()
+  }
+
+  const handleLogoutCancel = () => {
+    setShowLogoutConfirm(false)
   }
 
   return (
@@ -189,7 +201,7 @@ export default function Header() {
             <p className="text-sm font-mono text-cyber-cyan">{user?.toUpperCase() || 'UNKNOWN'}</p>
           </div>
           <button
-            onClick={handleLogout}
+            onClick={handleLogoutClick}
             className="p-2 rounded-lg border border-cyber-magenta/30 text-cyber-magenta/70 
               hover:border-cyber-magenta hover:text-cyber-magenta hover:bg-cyber-magenta/10
               transition-all duration-200 group"
@@ -203,6 +215,13 @@ export default function Header() {
           </button>
         </div>
       </div>
+
+      {/* Logout Confirmation Modal */}
+      <LogoutConfirmModal
+        isOpen={showLogoutConfirm}
+        onConfirm={handleLogoutConfirm}
+        onCancel={handleLogoutCancel}
+      />
     </header>
   )
 }

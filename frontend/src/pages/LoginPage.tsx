@@ -3,40 +3,134 @@
  * Themed access terminal with glitch effects and neon glow
  */
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { useAuth } from '../hooks/useAuth'
+
+// Matrix rain digit component
+function MatrixRain() {
+  const columns = useMemo(() => {
+    const cols = []
+    const numColumns = Math.floor(window.innerWidth / 20)
+    for (let i = 0; i < numColumns; i++) {
+      cols.push({
+        id: i,
+        left: `${(i / numColumns) * 100}%`,
+        delay: Math.random() * 5,
+        duration: 3 + Math.random() * 4,
+        digits: Array.from({ length: 15 + Math.floor(Math.random() * 10) }, () => 
+          Math.random() > 0.5 ? Math.floor(Math.random() * 10) : String.fromCharCode(0x30A0 + Math.random() * 96)
+        )
+      })
+    }
+    return cols
+  }, [])
+
+  return (
+    <div className="absolute inset-0 overflow-hidden pointer-events-none">
+      {columns.map((col) => (
+        <div
+          key={col.id}
+          className="absolute top-0 font-mono text-sm leading-tight"
+          style={{
+            left: col.left,
+            animation: `matrix-fall ${col.duration}s linear infinite`,
+            animationDelay: `${col.delay}s`,
+            opacity: 0,
+          }}
+        >
+          {col.digits.map((digit, idx) => (
+            <div
+              key={idx}
+              className="text-cyber-cyan"
+              style={{
+                opacity: 0.1 + (idx / col.digits.length) * 0.3,
+                textShadow: idx === col.digits.length - 1 ? '0 0 10px #00fff7' : 'none',
+              }}
+            >
+              {digit}
+            </div>
+          ))}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// Authentication overlay with typing animation
+function AuthenticatingOverlay({ onComplete }: { onComplete: () => void }) {
+  const [text, setText] = useState('')
+  const [isFadingOut, setIsFadingOut] = useState(false)
+  const fullText = 'AUTHENTICATING...'
+
+  useEffect(() => {
+    let charIndex = 0
+    const typingInterval = setInterval(() => {
+      if (charIndex <= fullText.length) {
+        setText(fullText.substring(0, charIndex))
+        charIndex++
+      } else {
+        clearInterval(typingInterval)
+      }
+    }, 100) // ~1.7s for full text
+
+    // After 2.5s total, start fade out
+    const fadeTimer = setTimeout(() => {
+      setIsFadingOut(true)
+    }, 2500)
+
+    // After fade (1s), complete
+    const completeTimer = setTimeout(() => {
+      onComplete()
+    }, 3500)
+
+    return () => {
+      clearInterval(typingInterval)
+      clearTimeout(fadeTimer)
+      clearTimeout(completeTimer)
+    }
+  }, [onComplete])
+
+  return (
+    <div className={`
+      fixed inset-0 z-50 bg-cyber-black flex items-center justify-center
+      transition-opacity duration-1000
+      ${isFadingOut ? 'opacity-0' : 'opacity-100'}
+    `}>
+      <div className="text-center">
+        <div className="cyber-spinner mx-auto mb-6 w-16 h-16" />
+        <p className="text-cyber-cyan font-mono text-2xl tracking-widest">
+          {text}
+          <span className="animate-pulse">_</span>
+        </p>
+        <div className="mt-4 flex justify-center gap-1">
+          {[...Array(5)].map((_, i) => (
+            <div
+              key={i}
+              className="w-2 h-2 bg-cyber-cyan rounded-full animate-pulse"
+              style={{ animationDelay: `${i * 0.2}s` }}
+            />
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
 
 export default function LoginPage() {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
-  const [loadingText, setLoadingText] = useState('')
+  const [showAuthOverlay, setShowAuthOverlay] = useState(false)
   const [showGlitch, setShowGlitch] = useState(false)
   const { login } = useAuth()
   const usernameRef = useRef<HTMLInputElement>(null)
+  const loginSuccessRef = useRef(false)
 
   // Focus username input on mount
   useEffect(() => {
     usernameRef.current?.focus()
   }, [])
-
-  // Loading text animation
-  useEffect(() => {
-    if (!isLoading) {
-      setLoadingText('')
-      return
-    }
-
-    const texts = ['AUTHENTICATING', 'AUTHENTICATING.', 'AUTHENTICATING..', 'AUTHENTICATING...']
-    let i = 0
-    const interval = setInterval(() => {
-      setLoadingText(texts[i % texts.length])
-      i++
-    }, 300)
-
-    return () => clearInterval(interval)
-  }, [isLoading])
 
   // Random glitch effect
   useEffect(() => {
@@ -58,19 +152,31 @@ export default function LoginPage() {
     try {
       const result = await login(username, password)
       
-      if (!result.success) {
+      if (result.success) {
+        // Show authenticating overlay
+        loginSuccessRef.current = true
+        setShowAuthOverlay(true)
+      } else {
         setError(result.message || 'ACCESS DENIED')
-        // Trigger error glitch
         setShowGlitch(true)
         setTimeout(() => setShowGlitch(false), 500)
+        setIsLoading(false)
       }
     } catch (err) {
       setError('SYSTEM ERROR - CONNECTION FAILED')
       setShowGlitch(true)
       setTimeout(() => setShowGlitch(false), 500)
-    } finally {
       setIsLoading(false)
     }
+  }
+
+  const handleAuthComplete = () => {
+    // Auth state change will trigger App.tsx to show boot sequence
+    setShowAuthOverlay(false)
+  }
+
+  if (showAuthOverlay) {
+    return <AuthenticatingOverlay onComplete={handleAuthComplete} />
   }
 
   return (
@@ -79,24 +185,26 @@ export default function LoginPage() {
       relative overflow-hidden
       ${showGlitch ? 'animate-glitch-shake' : ''}
     `}>
+      {/* Matrix rain background */}
+      <MatrixRain />
+      
       {/* Animated background */}
-      <div className="absolute inset-0 overflow-hidden">
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
         {/* Grid pattern */}
         <div 
-          className="absolute inset-0 opacity-10"
+          className="absolute inset-0 opacity-5"
           style={{
             backgroundImage: `
               linear-gradient(rgba(0, 255, 247, 0.1) 1px, transparent 1px),
               linear-gradient(90deg, rgba(0, 255, 247, 0.1) 1px, transparent 1px)
             `,
             backgroundSize: '50px 50px',
-            animation: 'grid-scroll 20s linear infinite'
           }}
         />
         
         {/* Scanline effect */}
         <div 
-          className="absolute inset-0 pointer-events-none opacity-20"
+          className="absolute inset-0 pointer-events-none opacity-10"
           style={{
             background: `linear-gradient(
               to bottom,
@@ -104,26 +212,11 @@ export default function LoginPage() {
               rgba(0, 0, 0, 0.3) 50%
             )`,
             backgroundSize: '100% 4px',
-            animation: 'scanline 8s linear infinite'
           }}
         />
         
         {/* Radial gradient */}
-        <div className="absolute inset-0 bg-gradient-radial from-transparent via-transparent to-cyber-black opacity-80" />
-        
-        {/* Floating particles */}
-        {[...Array(20)].map((_, i) => (
-          <div
-            key={i}
-            className="absolute w-1 h-1 bg-cyber-cyan/30 rounded-full"
-            style={{
-              left: `${Math.random() * 100}%`,
-              top: `${Math.random() * 100}%`,
-              animation: `float ${3 + Math.random() * 4}s ease-in-out infinite`,
-              animationDelay: `${Math.random() * 2}s`
-            }}
-          />
-        ))}
+        <div className="absolute inset-0 bg-gradient-radial from-transparent via-transparent to-cyber-black opacity-90" />
       </div>
 
       {/* Login container */}
@@ -134,11 +227,23 @@ export default function LoginPage() {
             text-3xl md:text-4xl font-mono font-bold tracking-wider
             ${showGlitch ? 'glitch-text' : ''}
           `}>
-            <span className="text-cyber-cyan drop-shadow-[0_0_10px_rgba(0,255,247,0.5)]">
-              ░▒▓ SYSTEM ACCESS ▓▒░
+            <span className="text-cyber-cyan drop-shadow-[0_0_10px_rgba(0,255,247,0.5)] flex items-center justify-center gap-3">
+              <span className="flex gap-0.5">
+                <span className="inline-block w-2 h-6 bg-cyber-cyan opacity-30"></span>
+                <span className="inline-block w-2 h-6 bg-cyber-cyan opacity-50"></span>
+                <span className="inline-block w-2 h-6 bg-cyber-cyan opacity-70"></span>
+                <span className="inline-block w-2 h-6 bg-cyber-cyan opacity-90"></span>
+              </span>
+              <span>SYSTEM ACCESS</span>
+              <span className="flex gap-0.5">
+                <span className="inline-block w-2 h-6 bg-cyber-cyan opacity-90"></span>
+                <span className="inline-block w-2 h-6 bg-cyber-cyan opacity-70"></span>
+                <span className="inline-block w-2 h-6 bg-cyber-cyan opacity-50"></span>
+                <span className="inline-block w-2 h-6 bg-cyber-cyan opacity-30"></span>
+              </span>
             </span>
           </h1>
-          <p className="text-cyber-cyan/50 text-sm font-mono mt-2 tracking-widest">
+          <p className="text-cyber-cyan/50 text-sm font-mono mt-3 tracking-widest">
             NYC VEHICLE SURVEILLANCE TERMINAL
           </p>
         </div>
@@ -159,8 +264,10 @@ export default function LoginPage() {
 
             {/* Username field */}
             <div className="mb-6">
-              <label className="block text-cyber-cyan/70 text-xs font-mono tracking-wider mb-2">
-                ╔═══ USER ID ═══╗
+              <label className="flex items-center text-cyber-cyan/70 text-xs font-mono tracking-wider mb-2">
+                <span className="text-cyber-cyan/40">══</span>
+                <span className="mx-2">USER ID</span>
+                <span className="text-cyber-cyan/40">══</span>
               </label>
               <div className="relative">
                 <input
@@ -193,8 +300,10 @@ export default function LoginPage() {
 
             {/* Password field */}
             <div className="mb-6">
-              <label className="block text-cyber-cyan/70 text-xs font-mono tracking-wider mb-2">
-                ╔═══ ACCESS CODE ═══╗
+              <label className="flex items-center text-cyber-cyan/70 text-xs font-mono tracking-wider mb-2">
+                <span className="text-cyber-cyan/40">══</span>
+                <span className="mx-2">ACCESS CODE</span>
+                <span className="text-cyber-cyan/40">══</span>
               </label>
               <div className="relative">
                 <input
@@ -248,29 +357,17 @@ export default function LoginPage() {
                 w-full py-4 rounded font-mono text-lg tracking-wider
                 transition-all duration-300 relative overflow-hidden
                 disabled:opacity-50 disabled:cursor-not-allowed
-                ${isLoading
-                  ? 'bg-cyber-cyan/20 border-2 border-cyber-cyan text-cyber-cyan'
-                  : 'bg-cyber-cyan/10 border-2 border-cyber-cyan text-cyber-cyan hover:bg-cyber-cyan/20 hover:shadow-[0_0_30px_rgba(0,255,247,0.4)]'
-                }
+                bg-cyber-cyan/10 border-2 border-cyber-cyan text-cyber-cyan 
+                hover:bg-cyber-cyan/20 hover:shadow-[0_0_30px_rgba(0,255,247,0.4)]
               `}
             >
               {/* Button glow effect */}
               <div className="absolute inset-0 bg-gradient-to-r from-transparent via-cyber-cyan/20 to-transparent -translate-x-full hover:translate-x-full transition-transform duration-700" />
               
-              {isLoading ? (
-                <span className="relative z-10 flex items-center justify-center gap-3">
-                  <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
-                  </svg>
-                  {loadingText}
-                </span>
-              ) : (
-                <span className="relative z-10 flex items-center justify-center gap-2">
-                  <span>▶</span>
-                  <span>AUTHENTICATE</span>
-                </span>
-              )}
+              <span className="relative z-10 flex items-center justify-center gap-2">
+                <span>▶</span>
+                <span>AUTHENTICATE</span>
+              </span>
             </button>
           </div>
         </form>
@@ -288,19 +385,21 @@ export default function LoginPage() {
 
       {/* Custom CSS for animations */}
       <style>{`
-        @keyframes grid-scroll {
-          0% { transform: translate(0, 0); }
-          100% { transform: translate(50px, 50px); }
-        }
-        
-        @keyframes scanline {
-          0% { transform: translateY(-100%); }
-          100% { transform: translateY(100vh); }
-        }
-        
-        @keyframes float {
-          0%, 100% { transform: translateY(0) scale(1); opacity: 0.3; }
-          50% { transform: translateY(-20px) scale(1.5); opacity: 0.6; }
+        @keyframes matrix-fall {
+          0% { 
+            transform: translateY(-100%);
+            opacity: 0;
+          }
+          10% {
+            opacity: 1;
+          }
+          90% {
+            opacity: 1;
+          }
+          100% { 
+            transform: translateY(100vh);
+            opacity: 0;
+          }
         }
         
         .glitch-text {
@@ -332,4 +431,3 @@ export default function LoginPage() {
     </div>
   )
 }
-
