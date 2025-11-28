@@ -52,20 +52,31 @@ function FallingWord({ left, delay, duration }: { left: string; delay: number; d
 
   return (
     <div
-      className="absolute font-mono text-cyber-cyan whitespace-nowrap"
+      className="absolute font-mono text-cyber-cyan flex flex-col items-center"
       style={{
         left,
         top: '-50px',
         animation: `matrix-fall-single ${duration}s linear infinite`,
         animationDelay: `${delay}s`,
         opacity: 0,
-        fontSize: word.length > 8 ? '10px' : '12px',
         textShadow: '0 0 8px #00fff7',
-        // Korean: vertical text, English: horizontal but falling vertically
-        writingMode: isKorean ? 'vertical-rl' : 'horizontal-tb',
       }}
     >
-      {word}
+      {isKorean ? (
+        // Korean: use writing-mode for proper vertical text
+        <span style={{ writingMode: 'vertical-rl', fontSize: '12px' }}>{word}</span>
+      ) : (
+        // English/Numbers: split into individual characters vertically
+        word.split('').map((char, idx) => (
+          <span 
+            key={idx} 
+            className="leading-tight"
+            style={{ fontSize: word.length > 8 ? '10px' : '12px' }}
+          >
+            {char}
+          </span>
+        ))
+      )}
     </div>
   )
 }
