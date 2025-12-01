@@ -37,9 +37,19 @@ from services.scheduler import init_scheduler, get_scheduler, stop_scheduler
 # Import download watcher
 from services.download_watcher import start_watcher, stop_watcher, get_watcher
 
+# Import coverage analysis services
+from services.kml_parser import parse_nyc_speed_signs, signs_to_geojson, get_sign_stats
+from services.coverage_analyzer import (
+    analyze_coverage, cluster_detections, result_to_geojson, get_coverage_stats
+)
+
 # Configuration
 DATA_ROOT = os.environ.get('DATA_ROOT', '/mnt/sata_2025/NYC/Test_data_2025_11_24')
 DB_PATH = os.environ.get('DB_PATH', '/home/daree/02-Work-dh/nyc-vehicle-tracker/backend/data/metadata_cache.db')
+NYC_KML_PATH = os.environ.get('NYC_KML_PATH', '/home/daree/02-Work-dh/nyc-vehicle-tracker/backend/data/nyc_sls_2025-10-24.kml')
+
+# Cached NYC signs (loaded once at startup)
+_nyc_signs_cache = None
 
 # Authentication configuration
 AUTH_USERS = {
@@ -799,6 +809,182 @@ async def get_combined_detections(request: CombinedRoutesRequest):
         "total": len(all_features),
         "trip_count": len(request.trips)
     }
+
+
+# ==================== Coverage Analysis Endpoints ====================
+
+def get_nyc_signs():
+    """Get NYC signs from cache or load from KML file."""
+    global _nyc_signs_cache
+    
+    if _nyc_signs_cache is None:
+        if os.path.exists(NYC_KML_PATH):
+            _nyc_signs_cache = parse_nyc_speed_signs(NYC_KML_PATH)
+            print(f"[Coverage] Loaded {len(_nyc_signs_cache)} NYC signs from KML")
+        else:
+            _nyc_signs_cache = []
+            print(f"[Coverage] KML file not found: {NYC_KML_PATH}")
+    
+    return _nyc_signs_cache
+
+
+@app.get("/api/coverage/nyc-signs")
+async def get_nyc_signs_geojson():
+    """Get all NYC official speed limit signs as GeoJSON."""
+    signs = get_nyc_signs()
+    
+    if not signs:
+        raise HTTPException(status_code=404, detail="NYC signs data not available")
+    
+    geojson = signs_to_geojson(signs)
+    stats = get_sign_stats(signs)
+    
+    return {
+        "geojson": geojson,
+        "stats": stats
+    }
+
+
+@app.get("/api/coverage/our-detections")
+async def get_all_detections_geojson(cluster: bool = True, cluster_radius: float = 30.0):
+    """Get all our YOLO detections as GeoJSON, optionally clustered."""
+    if not cache:
+        raise HTTPException(status_code=503, detail="Cache not initialized")
+    
+    # Get all detections with coordinates
+    conn = __import__('sqlite3').connect(cache.db_path)
+    conn.row_factory = __import__('sqlite3').Row
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT d.id, d.class_name, d.confidence, 
+               i.latitude, i.longitude, i.file_path, i.timestamp
+        FROM detections d
+        JOIN images i ON d.image_id = i.id
+        WHERE i.latitude IS NOT NULL AND i.longitude IS NOT NULL
+    ''')
+    
+    detections = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    
+    # Optionally cluster detections
+    if cluster and len(detections) > 0:
+        detections = cluster_detections(detections, cluster_radius)
+    
+    # Convert to GeoJSON
+    features = []
+    for det in detections:
+        feature = {
+            'type': 'Feature',
+            'geometry': {
+                'type': 'Point',
+                'coordinates': [det['longitude'], det['latitude']]
+            },
+            'properties': {
+                'class_name': det.get('class_name', ''),
+                'confidence': det.get('confidence', 0),
+                'detection_count': det.get('detection_count', 1)
+            }
+        }
+        features.append(feature)
+    
+    return {
+        "type": "FeatureCollection",
+        "features": features,
+        "total": len(features),
+        "clustered": cluster
+    }
+
+
+@app.get("/api/coverage/analysis")
+async def get_coverage_analysis(
+    radius: float = Query(50.0, description="Match radius in meters"),
+    cluster_radius: float = Query(30.0, description="Clustering radius for our detections")
+):
+    """
+    Analyze coverage between NYC official database and our detections.
+    
+    Returns matched, undetected, and new findings.
+    """
+    if not cache:
+        raise HTTPException(status_code=503, detail="Cache not initialized")
+    
+    # Get NYC signs
+    nyc_signs = get_nyc_signs()
+    if not nyc_signs:
+        raise HTTPException(status_code=404, detail="NYC signs data not available")
+    
+    # Get our detections
+    conn = __import__('sqlite3').connect(cache.db_path)
+    conn.row_factory = __import__('sqlite3').Row
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT d.id, d.class_name, d.confidence,
+               i.latitude, i.longitude, i.file_path, i.timestamp
+        FROM detections d
+        JOIN images i ON d.image_id = i.id
+        WHERE i.latitude IS NOT NULL AND i.longitude IS NOT NULL
+    ''')
+    
+    our_detections = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    
+    # Cluster our detections to reduce duplicates
+    clustered_detections = cluster_detections(our_detections, cluster_radius)
+    
+    # Run coverage analysis
+    result = analyze_coverage(nyc_signs, clustered_detections, radius)
+    
+    # Convert to response format
+    geojson = result_to_geojson(result)
+    stats = get_coverage_stats(result)
+    
+    return {
+        "geojson": geojson,
+        "stats": stats,
+        "parameters": {
+            "match_radius_meters": radius,
+            "cluster_radius_meters": cluster_radius,
+            "raw_detection_count": len(our_detections),
+            "clustered_detection_count": len(clustered_detections)
+        }
+    }
+
+
+@app.get("/api/coverage/stats")
+async def get_coverage_stats_only(
+    radius: float = Query(50.0, description="Match radius in meters"),
+    cluster_radius: float = Query(30.0, description="Clustering radius")
+):
+    """Get only the coverage statistics (lighter response)."""
+    if not cache:
+        raise HTTPException(status_code=503, detail="Cache not initialized")
+    
+    nyc_signs = get_nyc_signs()
+    if not nyc_signs:
+        raise HTTPException(status_code=404, detail="NYC signs data not available")
+    
+    # Get our detections
+    conn = __import__('sqlite3').connect(cache.db_path)
+    conn.row_factory = __import__('sqlite3').Row
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT d.id, d.class_name, d.confidence,
+               i.latitude, i.longitude
+        FROM detections d
+        JOIN images i ON d.image_id = i.id
+        WHERE i.latitude IS NOT NULL AND i.longitude IS NOT NULL
+    ''')
+    
+    our_detections = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    
+    clustered = cluster_detections(our_detections, cluster_radius)
+    result = analyze_coverage(nyc_signs, clustered, radius)
+    
+    return get_coverage_stats(result)
 
 
 if __name__ == "__main__":

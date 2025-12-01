@@ -14,7 +14,7 @@ export default function Header() {
   const { isGlitching, triggerGlitch } = useGlitch()
   const { user, logout } = useAuth()
 
-  const handleModeChange = (mode: '2d' | '3d') => {
+  const handleModeChange = (mode: '2d' | '3d' | 'coverage') => {
     triggerGlitch()
     setViewMode(mode)
   }
@@ -191,6 +191,23 @@ export default function Header() {
               <div className="absolute inset-0 bg-cyber-magenta/10" />
             )}
             <span className="relative z-10">3D VIEW</span>
+          </button>
+          
+          <button
+            onClick={() => handleModeChange('coverage')}
+            className={`
+              cyber-button px-4 py-2 text-sm font-mono tracking-wider
+              transition-all duration-200 relative overflow-hidden
+              ${viewMode === 'coverage' 
+                ? 'bg-cyber-yellow/20 border-cyber-yellow text-cyber-yellow shadow-cyber-yellow animate-glow-breathe' 
+                : 'border-cyber-yellow/30 text-cyber-yellow/50 hover:border-cyber-yellow/60'
+              }
+            `}
+          >
+            {viewMode === 'coverage' && (
+              <div className="absolute inset-0 bg-cyber-yellow/10" />
+            )}
+            <span className="relative z-10">COVERAGE</span>
           </button>
         </div>
 

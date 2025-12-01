@@ -1,12 +1,14 @@
 import { useState, useEffect, useRef, lazy, Suspense } from 'react'
 import { useIsMobile } from './hooks/useMediaQuery'
 import { useAuth } from './hooks/useAuth'
+import { useTripStore } from './stores/tripStore'
 import { BootSequence } from './components/ui'
 
 // Lazy load layouts and pages for code splitting
 const DesktopLayout = lazy(() => import('./layouts/DesktopLayout'))
 const MobileLayout = lazy(() => import('./layouts/MobileLayout'))
 const LoginPage = lazy(() => import('./pages/LoginPage'))
+const CoverageAnalysis = lazy(() => import('./pages/CoverageAnalysis'))
 
 // Loading fallback component
 function LayoutLoader() {
@@ -41,6 +43,7 @@ function App() {
   const [bootComplete, setBootComplete] = useState(false)
   const isMobile = useIsMobile()
   const { isAuthenticated, isLoading: isAuthLoading } = useAuth()
+  const { viewMode } = useTripStore()
   
   // Track previous auth state to detect login
   const wasAuthenticated = useRef(isAuthenticated)
@@ -90,6 +93,15 @@ function App() {
   }
 
   // Show main application
+  // Coverage mode is full-screen (no sidebar/panels)
+  if (viewMode === 'coverage') {
+    return (
+      <Suspense fallback={<LayoutLoader />}>
+        <CoverageAnalysis />
+      </Suspense>
+    )
+  }
+
   return (
     <Suspense fallback={<LayoutLoader />}>
       {isMobile ? <MobileLayout /> : <DesktopLayout />}

@@ -86,7 +86,7 @@ interface TripState {
   playbackSpeed: number
   
   // View state
-  viewMode: '2d' | '3d'
+  viewMode: '2d' | '3d' | 'coverage'
   
   // Map state
   mapCenter: [number, number]
@@ -100,7 +100,7 @@ interface TripState {
   setCurrentIndex: (index: number) => void
   setIsPlaying: (playing: boolean) => void
   setPlaybackSpeed: (speed: number) => void
-  setViewMode: (mode: '2d' | '3d') => void
+  setViewMode: (mode: '2d' | '3d' | 'coverage') => void
   setMapCenter: (center: [number, number]) => void
   setMapZoom: (zoom: number) => void
   setFollowVehicle: (follow: boolean) => void

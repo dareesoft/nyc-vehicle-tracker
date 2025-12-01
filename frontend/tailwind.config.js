@@ -26,6 +26,7 @@ export default {
       boxShadow: {
         'cyber-cyan': '0 0 20px rgba(0, 255, 247, 0.5)',
         'cyber-magenta': '0 0 20px rgba(255, 0, 255, 0.5)',
+        'cyber-yellow': '0 0 20px rgba(255, 255, 0, 0.5)',
         'cyber-glow': '0 0 40px rgba(0, 255, 247, 0.3), 0 0 80px rgba(255, 0, 255, 0.2)',
       },
       animation: {
