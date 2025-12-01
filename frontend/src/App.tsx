@@ -1,8 +1,9 @@
-import { useState, useEffect, useRef, lazy, Suspense } from 'react'
+import { useState, useEffect, useRef, lazy, Suspense, useCallback } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { useIsMobile } from './hooks/useMediaQuery'
 import { useAuth } from './hooks/useAuth'
 import { useTripStore } from './stores/tripStore'
-import { BootSequence } from './components/ui'
+import { BootSequence, type PrefetchedData } from './components/ui'
 
 // Lazy load layouts and pages for code splitting
 const DesktopLayout = lazy(() => import('./layouts/DesktopLayout'))
@@ -44,6 +45,7 @@ function App() {
   const isMobile = useIsMobile()
   const { isAuthenticated, isLoading: isAuthLoading } = useAuth()
   const { viewMode } = useTripStore()
+  const queryClient = useQueryClient()
   
   // Track previous auth state to detect login
   const wasAuthenticated = useRef(isAuthenticated)
@@ -67,11 +69,36 @@ function App() {
     }
   }, [isAuthenticated, isAuthLoading])
 
-  // Handle boot sequence completion
-  const handleBootComplete = () => {
+  // Handle boot sequence completion - store prefetched data in React Query cache
+  const handleBootComplete = useCallback((prefetchedData?: PrefetchedData) => {
+    if (prefetchedData) {
+      // Store health/status data
+      if (prefetchedData.health) {
+        queryClient.setQueryData(['health'], prefetchedData.health)
+      }
+      
+      // Store trips list
+      if (prefetchedData.trips) {
+        queryClient.setQueryData(['trips'], prefetchedData.trips)
+      }
+      
+      // Store recent trip details
+      if (prefetchedData.recent_trip) {
+        const { device_id, date } = prefetchedData.recent_trip
+        queryClient.setQueryData(['trip', device_id, date], prefetchedData.recent_trip)
+      }
+      
+      // Store coverage analysis data
+      if (prefetchedData.coverage) {
+        queryClient.setQueryData(['coverage-analysis', 50, 30, 'greedy_nearest'], prefetchedData.coverage)
+      }
+      
+      console.log('[Boot] Prefetched data cached:', Object.keys(prefetchedData))
+    }
+    
     setShowBoot(false)
     setBootComplete(true)
-  }
+  }, [queryClient])
 
   // Show auth loading while verifying token
   if (isAuthLoading) {
