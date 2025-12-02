@@ -203,8 +203,15 @@ async def lifespan(app: FastAPI):
     init_scheduler(run_scan)
     print("Scheduler initialized for daily scans at 22:00 KST")
     
+    # Get the current event loop for thread-safe async calls
+    main_loop = asyncio.get_running_loop()
+    
     # Initialize download watcher (triggers scan when S3 download completes)
-    start_watcher(on_download_complete=lambda: asyncio.create_task(run_scan()))
+    # Use run_coroutine_threadsafe since the callback runs in a different thread
+    def trigger_scan_from_thread():
+        asyncio.run_coroutine_threadsafe(run_scan(), main_loop)
+    
+    start_watcher(on_download_complete=trigger_scan_from_thread)
     print("Download watcher initialized - will scan when S3 downloads complete")
     
     # Pre-compute coverage analysis in background
