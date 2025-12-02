@@ -203,6 +203,7 @@ export default function CoverageAnalysis() {
     progressState,
     setAnalysisData,
     setMatchRadius,
+    setClusterRadius,
     setAlgorithm,
     toggleFilter,
     setLoading,
@@ -531,6 +532,11 @@ export default function CoverageAnalysis() {
   const handleRadiusChange = useCallback((value: number) => {
     setMatchRadius(value)
   }, [setMatchRadius])
+  
+  // Handle cluster radius change
+  const handleClusterRadiusChange = useCallback((value: number) => {
+    setClusterRadius(value)
+  }, [setClusterRadius])
 
   // Get status color and label
   const getStatusInfo = (status: string) => {
@@ -770,6 +776,37 @@ export default function CoverageAnalysis() {
                   <div className="flex justify-between text-[9px] text-cyber-cyan/30 mt-0.5">
                     <span>10m</span>
                     <span>100m</span>
+                  </div>
+                </div>
+                
+                {/* Cluster Radius */}
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-[10px] text-cyber-cyan/70">Cluster Radius</label>
+                    <span className="text-[10px] font-mono text-cyber-magenta">
+                      {clusterRadius === 0 ? 'OFF' : `${clusterRadius}m`}
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    step="5"
+                    value={clusterRadius}
+                    onChange={(e) => handleClusterRadiusChange(Number(e.target.value))}
+                    className="w-full h-1.5 bg-cyber-dark rounded-lg appearance-none cursor-pointer
+                      [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3
+                      [&::-webkit-slider-thumb]:bg-cyber-magenta [&::-webkit-slider-thumb]:rounded-full
+                      [&::-webkit-slider-thumb]:shadow-[0_0_8px_rgba(255,0,255,0.5)]"
+                  />
+                  <div className="flex justify-between text-[9px] text-cyber-magenta/30 mt-0.5">
+                    <span>0 (off)</span>
+                    <span>100m</span>
+                  </div>
+                  <div className="mt-1 text-[9px] text-cyber-cyan/50">
+                    {clusterRadius === 0 
+                      ? 'No clustering - use all detections' 
+                      : `Merge detections within ${clusterRadius}m`}
                   </div>
                 </div>
                 
